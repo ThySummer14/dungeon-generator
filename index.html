@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%2305060a'/%3E%3Cpath d='M3 12V5l5-3 5 3v7H3z' fill='%23ff8c3a'/%3E%3Cpath d='M5 12V7h6v5H5z' fill='%2313171f'/%3E%3C/svg%3E"/>
 <title>Procedural Dungeon — Isometric ARPG</title>
 <style>
   :root{
@@ -695,19 +696,19 @@ function buildWalls(grid, floorKind, W, H, bossFloorMask){
 function findDoorways(grid, floorKind, W, H, corridorCells){
   const seen=new Map();
   const out=[];
-  for(const c of corridorCells){
-    const i=c.y*W+c.x;
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const i=y*W+x;
     if(floorKind[i]!==2) continue;
     const nbrs=[[1,0],[-1,0],[0,1],[0,-1]];
     let adjRoom=false;
     for(const [dx,dy] of nbrs){
-      const nx=c.x+dx, ny=c.y+dy;
+      const nx=x+dx, ny=y+dy;
       if(nx<0||ny<0||nx>=W||ny>=H) continue;
       if(floorKind[ny*W+nx]===1){ adjRoom=true; break; }
     }
     if(adjRoom){
-      const key=c.x*100000+c.y;
-      if(!seen.has(key)){ seen.set(key,1); out.push({x:c.x,y:c.y}); }
+      const key=x*100000+y;
+      if(!seen.has(key)){ seen.set(key,1); out.push({x,y}); }
     }
   }
   out.sort((a,b)=>a.x-b.x||a.y-b.y);
@@ -945,7 +946,7 @@ function cropToFloor(grid, floorKind, bfs, decor, doorways, corridorCells, W, H,
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
   for(let y=0;y<H;y++) for(let x=0;x<W;x++){
     const c=grid[y*W+x];
-    if(c===FLOOR||c===WALL){ if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
+    if(c===FLOOR){ if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
   }
   if(!isFinite(minX)) return null;
   const pad=1;
@@ -1538,7 +1539,7 @@ const LANG = {
     t_lights:"lights within budget ≤12", t_genms:"gen <50ms @60 rooms",
     t_doorway:"boss doorway on long-edge center", t_wall2:"boss wall thickness = 2",
     v_ok:"ok", v_offfloor:"off-floor", v_adjacent:"adjacent", v_ondoorway:"on doorway",
-    v_thick:"2-thick", v_unknown:"?", v_none:"none"
+    v_thick:"2-thick", v_unknown:"?", v_none:"none", v_fallback:"fallback"
   },
   zh: {
     title:"⚰ 地牢铸造", seed:"种子", roll:"🎲 随机", gen:"▶ 生成",
@@ -1561,7 +1562,7 @@ const LANG = {
     t_lights:"光源数量 ≤12（预算内）", t_genms:"60 房间生成 <50ms",
     t_doorway:"首领门开在长边中心", t_wall2:"首领墙体厚度 = 2",
     v_ok:"正常", v_offfloor:"脱离地板", v_adjacent:"相邻", v_ondoorway:"占用门口",
-    v_thick:"2格厚", v_unknown:"?", v_none:"无"
+    v_thick:"2格厚", v_unknown:"?", v_none:"无", v_fallback:"安全回退"
   }
 };
 function t(key){ return (LANG[currentLang] && LANG[currentLang][key]) ?? key; }
@@ -1688,14 +1689,12 @@ function runTests(d, params){
   for(let i=0;i<grid.length;i++){ if(grid[i]===FLOOR){floor++; if(bfs[i]>=0)reached++;} }
   const floodPct=floor>0?reached/floor*100:0;
   out.push([t('t_flood'), floodPct>=99.99, floodPct.toFixed(2)+"%"]);
-  // 2. checksum stable across 3 runs (skip for fallback)
+  // 2. checksum stable across 3 runs
   let csOk=true, csVal=stats.checksum;
-  if(!stats.fallback){
-    const a=generateDungeon(params).stats.checksum;
-    const b=generateDungeon(params).stats.checksum;
-    csOk=(a===b && b===csVal);
-    csVal=csOk?csVal:csVal+"≠"+a.slice(0,6);
-  }
+  const a=generateDungeon(params).stats.checksum;
+  const b=generateDungeon(params).stats.checksum;
+  csOk=(a===b && b===csVal);
+  csVal=csOk?csVal:csVal+"≠"+a.slice(0,6);
   out.push([t('t_checksum'), csOk, csVal]);
   // 3. boss depth / entrance
   const boss=rooms[stats.bossId], entrance=rooms[stats.entranceId];
@@ -1726,8 +1725,9 @@ function runTests(d, params){
   try{
     const bench=generateDungeon({seed:params.seed,roomCount:60,loopChance:params.loopChance,decorDensity:params.decorDensity,theme:params.theme});
     benchMs=bench.stats.genMs;
+    if(bench.stats.fallback || bench.stats.rooms!==60) benchMs=Infinity;
   }catch(e){ benchMs=Infinity; }
-  out.push([t('t_genms'), benchMs<50, benchMs.toFixed(1)+"ms"]);
+  out.push([t('t_genms'), benchMs<50, isFinite(benchMs)?benchMs.toFixed(1)+"ms":t('v_fallback')]);
   // 7. boss doorway on long-edge center
   const bd=stats.bossDoorway;
   let dwOk=false;
@@ -1737,16 +1737,21 @@ function runTests(d, params){
     }else{
       dwOk=(bd.y===boss.cy-Math.floor(boss.h/2)||bd.y===boss.cy+Math.floor(boss.h/2))&&bd.x===boss.cx;
     }
+    const realDoor = dwSet.has(bd.x+","+bd.y) ||
+      [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>dwSet.has((bd.x+dx)+","+(bd.y+dy)));
+    dwOk = dwOk && realDoor && cellAt(bd.x,bd.y)===FLOOR;
   }
   out.push([t('t_doorway'), dwOk, bd?`(${bd.x},${bd.y})`:t('v_none')]);
-  // boss wall thickness 2 — sample a short edge (perpendicular to the doorway's
-  // long edge) at distance 2. Non-boss corridors avoid the 2-ring (detour/gap);
-  // only rare boss loop corridors along this side can pierce it.
+  // Boss wall thickness 2 — sample both non-door side centers at distance 1 and 2.
   let thick2=false;
-  if(boss.w>=boss.h){ // doorway on E/W long edge → sample north short edge
-    thick2 = cellAt(boss.cx, boss.cy-Math.floor(boss.h/2)-2)===WALL;
-  }else{              // doorway on N/S long edge → sample east short edge
-    thick2 = cellAt(boss.cx+Math.floor(boss.w/2)+2, boss.cy)===WALL;
+  if(boss.w>=boss.h){
+    const yN=boss.cy-Math.floor(boss.h/2), yS=boss.cy+Math.floor(boss.h/2);
+    thick2 = cellAt(boss.cx,yN-1)===WALL && cellAt(boss.cx,yN-2)===WALL &&
+             cellAt(boss.cx,yS+1)===WALL && cellAt(boss.cx,yS+2)===WALL;
+  }else{
+    const xW=boss.cx-Math.floor(boss.w/2), xE=boss.cx+Math.floor(boss.w/2);
+    thick2 = cellAt(xW-1,boss.cy)===WALL && cellAt(xW-2,boss.cy)===WALL &&
+             cellAt(xE+1,boss.cy)===WALL && cellAt(xE+2,boss.cy)===WALL;
   }
   out.push([t('t_wall2'), thick2, thick2?t('v_thick'):t('v_unknown')]);
 
@@ -1762,7 +1767,10 @@ function wirePanel(){
     });
   document.getElementById('gen').addEventListener('click', regenerate);
   document.getElementById('roll').addEventListener('click', ()=>{
-    document.getElementById('seed').value=((Math.random()*1e9)|0)+1;
+    const buf=new Uint32Array(1);
+    if(window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(buf);
+    else buf[0]=Math.imul(readParams().seed ^ 0xA5A5A5A5, 1664525) + 1013904223;
+    document.getElementById('seed').value=(buf[0] % 1000000000) + 1;
     regenerate();
   });
   ['ov_graph','ov_mst','ov_loops','ov_critical','ov_diff'].forEach(id=>{
