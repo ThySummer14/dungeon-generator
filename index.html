@@ -51,42 +51,45 @@
 <body>
 <div id="app">
   <div id="panel">
-    <h1>⚰ Dungeon Forge</h1>
-    <div class="row"><label>seed</label><input id="seed" type="text" value="1337"/></div>
-    <div class="btns">
-      <button id="roll">🎲 Roll</button>
-      <button id="gen">▶ Generate</button>
+    <div class="row" style="justify-content:space-between">
+      <h1 data-i18n="title" style="margin:0">⚰ Dungeon Forge</h1>
+      <button id="langBtn" style="flex:0 0 auto">中文</button>
     </div>
-    <h2>Shape</h2>
-    <div class="row"><label>roomCount</label><input id="roomCount" type="range" min="8" max="80" value="42"/><span class="val" id="roomCount_v">42</span></div>
-    <div class="row"><label>loopChance</label><input id="loopChance" type="range" min="0" max="0.5" step="0.01" value="0.15"/><span class="val" id="loopChance_v">0.15</span></div>
-    <div class="row"><label>decorDensity</label><input id="decorDensity" type="range" min="0" max="1" step="0.05" value="0.6"/><span class="val" id="decorDensity_v">0.60</span></div>
-    <div class="row"><label>theme</label><select id="theme">
-      <option value="crypt">crypt</option><option value="cavern">cavern</option>
-      <option value="catacomb">catacomb</option><option value="inferno">inferno</option>
+    <div class="row"><label data-i18n="seed">seed</label><input id="seed" type="text" value="1337"/></div>
+    <div class="btns">
+      <button id="roll" data-i18n="roll">🎲 Roll</button>
+      <button id="gen" data-i18n="gen">▶ Generate</button>
+    </div>
+    <h2 data-i18n="shape">Shape</h2>
+    <div class="row"><label data-i18n="roomCount">roomCount</label><input id="roomCount" type="range" min="8" max="80" value="42"/><span class="val" id="roomCount_v">42</span></div>
+    <div class="row"><label data-i18n="loopChance">loopChance</label><input id="loopChance" type="range" min="0" max="0.5" step="0.01" value="0.15"/><span class="val" id="loopChance_v">0.15</span></div>
+    <div class="row"><label data-i18n="decorDensity">decorDensity</label><input id="decorDensity" type="range" min="0" max="1" step="0.05" value="0.6"/><span class="val" id="decorDensity_v">0.60</span></div>
+    <div class="row"><label data-i18n="theme">theme</label><select id="theme">
+      <option value="crypt" data-i18n="theme_crypt">crypt</option><option value="cavern" data-i18n="theme_cavern">cavern</option>
+      <option value="catacomb" data-i18n="theme_catacomb">catacomb</option><option value="inferno" data-i18n="theme_inferno">inferno</option>
     </select></div>
-    <div class="chk"><input id="animateBuild" type="checkbox"/><label for="animateBuild">staged build animation</label></div>
-    <h2>Overlays</h2>
-    <div class="chk"><input id="ov_graph" type="checkbox"/><label>graph (Delaunay/KNN)</label></div>
-    <div class="chk"><input id="ov_mst" type="checkbox" checked/><label>MST</label></div>
-    <div class="chk"><input id="ov_loops" type="checkbox"/><label>loops</label></div>
-    <div class="chk"><input id="ov_critical" type="checkbox" checked/><label>critical path</label></div>
-    <div class="chk"><input id="ov_diff" type="checkbox"/><label>difficulty heatmap</label></div>
-    <h2>Stats</h2>
+    <div class="chk"><input id="animateBuild" type="checkbox"/><label data-i18n="animateBuild" for="animateBuild">staged build animation</label></div>
+    <h2 data-i18n="overlays">Overlays</h2>
+    <div class="chk"><input id="ov_graph" type="checkbox"/><label data-i18n="ov_graph">graph (Delaunay/KNN)</label></div>
+    <div class="chk"><input id="ov_mst" type="checkbox" checked/><label data-i18n="ov_mst">MST</label></div>
+    <div class="chk"><input id="ov_loops" type="checkbox"/><label data-i18n="ov_loops">loops</label></div>
+    <div class="chk"><input id="ov_critical" type="checkbox" checked/><label data-i18n="ov_critical">critical path</label></div>
+    <div class="chk"><input id="ov_diff" type="checkbox"/><label data-i18n="ov_diff">difficulty heatmap</label></div>
+    <h2 data-i18n="stats_h">Stats</h2>
     <div id="stats"><div><span>—</span><span></span></div></div>
-    <h2>Acceptance</h2>
+    <h2 data-i18n="accept_h">Acceptance</h2>
     <div id="tests"></div>
   </div>
   <div id="view">
     <div id="hud">—</div>
     <div id="legend">
-      <span><i class="sw" style="background:#ff5a5a"></i>critical</span>
-      <span><i class="sw" style="background:#46d6e6"></i>loop</span>
-      <span><i class="sw" style="background:#ff8c3a"></i>torch</span>
-      <span><i class="sw" style="background:#9d7bff"></i>boss</span>
-      <span><i class="sw" style="background:#6fe89a"></i>treasure</span>
+      <span><i class="sw" style="background:#ff5a5a"></i><span data-i18n="leg_crit">critical</span></span>
+      <span><i class="sw" style="background:#46d6e6"></i><span data-i18n="leg_loop">loop</span></span>
+      <span><i class="sw" style="background:#ff8c3a"></i><span data-i18n="leg_torch">torch</span></span>
+      <span><i class="sw" style="background:#9d7bff"></i><span data-i18n="leg_boss">boss</span></span>
+      <span><i class="sw" style="background:#6fe89a"></i><span data-i18n="leg_treasure">treasure</span></span>
     </div>
-    <div id="buildBar">building…</div>
+    <div id="buildBar" data-i18n="building">building…</div>
   </div>
 </div>
 
@@ -1511,6 +1514,63 @@ const view = document.getElementById('view');
 const hud  = document.getElementById('hud');
 const buildBar = document.getElementById('buildBar');
 
+// ---- i18n: English (default) / Chinese toggle ----
+let currentLang = 'en';
+const LANG = {
+  en: {
+    title:"⚰ Dungeon Forge", seed:"seed", roll:"🎲 Roll", gen:"▶ Generate",
+    shape:"Shape", roomCount:"roomCount", loopChance:"loopChance", decorDensity:"decorDensity",
+    theme:"theme", theme_crypt:"crypt", theme_cavern:"cavern", theme_catacomb:"catacomb", theme_inferno:"inferno",
+    animateBuild:"staged build animation", overlays:"Overlays",
+    ov_graph:"graph (Delaunay/KNN)", ov_mst:"MST", ov_loops:"loops",
+    ov_critical:"critical path", ov_diff:"difficulty heatmap",
+    stats_h:"Stats", accept_h:"Acceptance",
+    leg_crit:"critical", leg_loop:"loop", leg_torch:"torch", leg_boss:"boss", leg_treasure:"treasure",
+    building:"building…",
+    st_name:"name", st_seed:"seed", st_rooms:"rooms", st_edges:"edges", st_loops:"loops",
+    st_critlen:"crit len", st_floor:"floor", st_wall:"wall", st_props:"props", st_spawns:"spawns",
+    st_lights:"lights", st_bossdepth:"bossDepth", st_graph:"graph", st_genms:"gen ms",
+    st_checksum:"checksum", st_flood:"flood",
+    t_flood:"flood reachability 100%", t_checksum:"checksum stable (3 runs, FNV-1a)",
+    t_bossdepth:"boss depth ≥60% max", t_entdeg:"entrance degree=1", t_entadj:"entrance ≠ boss-adjacent",
+    t_leaves:"≥3 leaves (40+ rooms)", t_cyc:"cyclomatic = E−V+1 ≥1",
+    t_onfloor:"props/spawns on FLOOR only", t_nodoor:"none on doorways (mask)",
+    t_lights:"lights within budget ≤12", t_genms:"gen <50ms @60 rooms",
+    t_doorway:"boss doorway on long-edge center", t_wall2:"boss wall thickness = 2",
+    v_ok:"ok", v_offfloor:"off-floor", v_adjacent:"adjacent", v_ondoorway:"on doorway",
+    v_thick:"2-thick", v_unknown:"?", v_none:"none"
+  },
+  zh: {
+    title:"⚰ 地牢铸造", seed:"种子", roll:"🎲 随机", gen:"▶ 生成",
+    shape:"形状", roomCount:"房间数", loopChance:"环路概率", decorDensity:"装饰密度",
+    theme:"主题", theme_crypt:"地穴", theme_cavern:"洞窟", theme_catacomb:"墓穴", theme_inferno:"地狱",
+    animateBuild:"分阶段建造动画", overlays:"叠加层",
+    ov_graph:"连接图（Delaunay/KNN）", ov_mst:"最小生成树", ov_loops:"环路",
+    ov_critical:"关键路径", ov_diff:"难度热力图",
+    stats_h:"统计", accept_h:"验收测试",
+    leg_crit:"关键路径", leg_loop:"环路", leg_torch:"火把", leg_boss:"首领", leg_treasure:"宝藏",
+    building:"建造中…",
+    st_name:"名称", st_seed:"种子", st_rooms:"房间数", st_edges:"边数", st_loops:"环路",
+    st_critlen:"关键路径长度", st_floor:"地板", st_wall:"墙壁", st_props:"道具", st_spawns:"刷怪点",
+    st_lights:"光源", st_bossdepth:"首领深度", st_graph:"连接图", st_genms:"生成耗时",
+    st_checksum:"校验和", st_flood:"洪水填充率",
+    t_flood:"洪水填充可达率 100%", t_checksum:"校验和 3 次稳定（FNV-1a）",
+    t_bossdepth:"首领深度 ≥60% 最大深度", t_entdeg:"入口度数 = 1", t_entadj:"入口 ≠ 首领相邻",
+    t_leaves:"≥3 个叶节点房间（40+ 房间时）", t_cyc:"环路数 = E−V+1 ≥1",
+    t_onfloor:"道具/刷怪点仅在地板上", t_nodoor:"无道具/刷怪点占用门口（掩码）",
+    t_lights:"光源数量 ≤12（预算内）", t_genms:"60 房间生成 <50ms",
+    t_doorway:"首领门开在长边中心", t_wall2:"首领墙体厚度 = 2",
+    v_ok:"正常", v_offfloor:"脱离地板", v_adjacent:"相邻", v_ondoorway:"占用门口",
+    v_thick:"2格厚", v_unknown:"?", v_none:"无"
+  }
+};
+function t(key){ return (LANG[currentLang] && LANG[currentLang][key]) ?? key; }
+function applyLang(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent = t(el.getAttribute('data-i18n')); });
+  document.getElementById('langBtn').textContent = currentLang==='en' ? '中文' : 'EN';
+  if(dungeon){ updateStats(dungeon); runTests(dungeon, dungeon.params); }
+}
+
 function initThree(){
   renderer = new THREE.WebGLRenderer({antialias:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
@@ -1530,6 +1590,11 @@ function fitCamera(d){
   const halfH=span/2+4, halfW=halfH*aspect;
   camera.left=-halfW; camera.right=halfW; camera.top=halfH; camera.bottom=-halfH;
   camera.updateProjectionMatrix();
+  // fog density must scale with span: camera distance R grows with span, and a
+  // fixed density (tuned for one size) fully whites out any larger dungeon —
+  // this was washing the whole scene to black. Keep density relative to span
+  // instead, clamped so tiny/huge layouts still get a subtle depth falloff.
+  scene.fog.density = Math.min(0.02, Math.max(0.0015, 0.22/span));
   const R=span*1.6+24;
   const yaw=Math.PI/4, pitch=37*Math.PI/180;
   camera.position.set(cx+R*Math.cos(pitch)*Math.cos(yaw), R*Math.sin(pitch), cz+R*Math.cos(pitch)*Math.sin(yaw));
@@ -1593,22 +1658,22 @@ function regenerate(){
 function updateStats(d){
   const s=d.stats;
   const rows=[
-    ["name", d.name],
-    ["seed", d.params.seed],
-    ["rooms", s.rooms],
-    ["edges", s.edges],
-    ["loops", s.loops+" (κ="+s.cyclomatic+")"],
-    ["crit len", s.criticalLength],
-    ["floor", s.floorTiles],
-    ["wall", s.wallTiles],
-    ["props", s.props],
-    ["spawns", s.spawns],
-    ["lights", s.lights],
-    ["bossDepth", s.bossDepth+"/"+s.maxBfs],
-    ["graph", s.usedDelaunay?("Delaunay·"+s.triCount):"KNN(k=4)"],
-    ["gen ms", s.genMs.toFixed(1)],
-    ["checksum", s.checksum],
-    ["flood", s.flood+"%"]
+    [t('st_name'), d.name],
+    [t('st_seed'), d.params.seed],
+    [t('st_rooms'), s.rooms],
+    [t('st_edges'), s.edges],
+    [t('st_loops'), s.loops+" (κ="+s.cyclomatic+")"],
+    [t('st_critlen'), s.criticalLength],
+    [t('st_floor'), s.floorTiles],
+    [t('st_wall'), s.wallTiles],
+    [t('st_props'), s.props],
+    [t('st_spawns'), s.spawns],
+    [t('st_lights'), s.lights],
+    [t('st_bossdepth'), s.bossDepth+"/"+s.maxBfs],
+    [t('st_graph'), s.usedDelaunay?("Delaunay·"+s.triCount):"KNN(k=4)"],
+    [t('st_genms'), s.genMs.toFixed(1)],
+    [t('st_checksum'), s.checksum],
+    [t('st_flood'), s.flood+"%"]
   ];
   document.getElementById('stats').innerHTML =
     rows.map(r=>`<div><span>${r[0]}</span><b>${r[1]}</b></div>`).join("");
@@ -1622,7 +1687,7 @@ function runTests(d, params){
   let floor=0,reached=0;
   for(let i=0;i<grid.length;i++){ if(grid[i]===FLOOR){floor++; if(bfs[i]>=0)reached++;} }
   const floodPct=floor>0?reached/floor*100:0;
-  out.push(["flood reachability 100%", floodPct>=99.99, floodPct.toFixed(2)+"%"]);
+  out.push([t('t_flood'), floodPct>=99.99, floodPct.toFixed(2)+"%"]);
   // 2. checksum stable across 3 runs (skip for fallback)
   let csOk=true, csVal=stats.checksum;
   if(!stats.fallback){
@@ -1631,38 +1696,38 @@ function runTests(d, params){
     csOk=(a===b && b===csVal);
     csVal=csOk?csVal:csVal+"≠"+a.slice(0,6);
   }
-  out.push(["checksum stable (3 runs, FNV-1a)", csOk, csVal]);
+  out.push([t('t_checksum'), csOk, csVal]);
   // 3. boss depth / entrance
   const boss=rooms[stats.bossId], entrance=rooms[stats.entranceId];
-  out.push(["boss depth ≥60% max", stats.bossDepth>=0.6*stats.maxBfs, stats.bossDepth+"/"+stats.maxBfs]);
-  out.push(["entrance degree=1", entrance.degree===1, "deg="+entrance.degree]);
+  out.push([t('t_bossdepth'), stats.bossDepth>=0.6*stats.maxBfs, stats.bossDepth+"/"+stats.maxBfs]);
+  out.push([t('t_entdeg'), entrance.degree===1, "deg="+entrance.degree]);
   let adj=false;
   for(const e of edges){ if((e.a===entrance.id&&e.b===boss.id)||(e.a===boss.id&&e.b===entrance.id)){adj=true;break;} }
-  out.push(["entrance ≠ boss-adjacent", !adj, adj?"adjacent":"ok"]);
+  out.push([t('t_entadj'), !adj, adj?t('v_adjacent'):t('v_ok')]);
   // 4. leaves + cyclomatic
   const leaves=rooms.filter(r=>r.degree===1).length;
   const wantL=rooms.length>=40?3:1;
-  out.push(["≥3 leaves (40+ rooms)", leaves>=wantL, leaves+" leaves"]);
+  out.push([t('t_leaves'), leaves>=wantL, leaves+" leaves"]);
   const cyc=edges.length-rooms.length+1;
-  out.push(["cyclomatic = E−V+1 ≥1", cyc===stats.cyclomatic && cyc>=1, "κ="+cyc]);
+  out.push([t('t_cyc'), cyc===stats.cyclomatic && cyc>=1, "κ="+cyc]);
   // 5. props/spawns placement
   let badFloor=false;
   for(const p of props){ if(cellAt(p.x,p.y)!==FLOOR){badFloor=true;break;} }
   for(const s of spawns){ if(cellAt(s.x,s.y)!==FLOOR){badFloor=true;break;} }
-  out.push(["props/spawns on FLOOR only", !badFloor, badFloor?"off-floor":"ok"]);
+  out.push([t('t_onfloor'), !badFloor, badFloor?t('v_offfloor'):t('v_ok')]);
   const dwSet=new Set(doorways.map(d=>d.x+","+d.y));
   let onDoor=false;
   for(const p of props){ if(dwSet.has(p.x+","+p.y)){onDoor=true;break;} }
   if(!onDoor) for(const s of spawns){ if(dwSet.has(s.x+","+s.y)){onDoor=true;break;} }
-  out.push(["none on doorways (mask)", !onDoor, onDoor?"on doorway":"ok"]);
-  out.push(["lights within budget ≤12", stats.lights<=12, stats.lights]);
+  out.push([t('t_nodoor'), !onDoor, onDoor?t('v_ondoorway'):t('v_ok')]);
+  out.push([t('t_lights'), stats.lights<=12, stats.lights]);
   // 6. gen time — dedicated 60-room benchmark (decoupled from the slider)
   let benchMs=Infinity;
   try{
     const bench=generateDungeon({seed:params.seed,roomCount:60,loopChance:params.loopChance,decorDensity:params.decorDensity,theme:params.theme});
     benchMs=bench.stats.genMs;
   }catch(e){ benchMs=Infinity; }
-  out.push(["gen <50ms @60 rooms", benchMs<50, benchMs.toFixed(1)+"ms"]);
+  out.push([t('t_genms'), benchMs<50, benchMs.toFixed(1)+"ms"]);
   // 7. boss doorway on long-edge center
   const bd=stats.bossDoorway;
   let dwOk=false;
@@ -1673,7 +1738,7 @@ function runTests(d, params){
       dwOk=(bd.y===boss.cy-Math.floor(boss.h/2)||bd.y===boss.cy+Math.floor(boss.h/2))&&bd.x===boss.cx;
     }
   }
-  out.push(["boss doorway on long-edge center", dwOk, bd?`(${bd.x},${bd.y})`:"none"]);
+  out.push([t('t_doorway'), dwOk, bd?`(${bd.x},${bd.y})`:t('v_none')]);
   // boss wall thickness 2 — sample a short edge (perpendicular to the doorway's
   // long edge) at distance 2. Non-boss corridors avoid the 2-ring (detour/gap);
   // only rare boss loop corridors along this side can pierce it.
@@ -1683,7 +1748,7 @@ function runTests(d, params){
   }else{              // doorway on N/S long edge → sample east short edge
     thick2 = cellAt(boss.cx+Math.floor(boss.w/2)+2, boss.cy)===WALL;
   }
-  out.push(["boss wall thickness = 2", thick2, thick2?"2-thick":"?"]);
+  out.push([t('t_wall2'), thick2, thick2?t('v_thick'):t('v_unknown')]);
 
   document.getElementById('tests').innerHTML =
     out.map(t=>`<div class="t"><span class="sw" style="background:${t[1]?'#6fe89a':'#ff5a5a'}"></span><b>${t[1]?'✓':'✗'}</b> ${t[0]} — <span style="color:var(--dim)">${t[2]}</span></div>`).join("");
@@ -1705,6 +1770,10 @@ function wirePanel(){
   });
   document.getElementById('theme').addEventListener('change', regenerate);
   document.getElementById('seed').addEventListener('keydown', e=>{ if(e.key==='Enter') regenerate(); });
+  document.getElementById('langBtn').addEventListener('click', ()=>{
+    currentLang = currentLang==='en' ? 'zh' : 'en';
+    applyLang();
+  });
 }
 
 function animate(time){
@@ -1713,7 +1782,7 @@ function animate(time){
     if(buildState && buildState.animating){
       const p=Math.min(1,(time-buildState.start)/buildState.dur);
       sceneGroup.applyBuild(p);
-      buildBar.textContent="building… "+((p*100)|0)+"%";
+      buildBar.textContent=t('building')+" "+((p*100)|0)+"%";
       if(p>=1){ buildState.animating=false; buildBar.style.display='none'; sceneGroup.finalizeBuild(); applyOverlayToggles(); }
     }
     sceneGroup.update(time);
@@ -1723,6 +1792,7 @@ function animate(time){
 
 initThree();
 wirePanel();
+applyLang();
 regenerate();
 requestAnimationFrame(animate);
 </script>
