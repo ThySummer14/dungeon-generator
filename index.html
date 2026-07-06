@@ -1,0 +1,1730 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Procedural Dungeon — Isometric ARPG</title>
+<style>
+  :root{
+    --bg:#0a0c10; --panel:#13171f; --panel2:#1b2030; --line:#2a3142;
+    --txt:#c7cee0; --dim:#7d869c; --accent:#ff8c3a; --cyan:#46d6e6; --red:#ff5a5a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:hidden}
+  #app{display:grid;grid-template-columns:300px 1fr;height:100vh}
+  #panel{background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:12px}
+  #panel h1{font-size:13px;margin:0 0 8px;letter-spacing:.5px;color:#fff}
+  #panel h2{font-size:11px;margin:14px 0 6px;color:var(--dim);
+    text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--line);padding-bottom:3px}
+  .row{display:flex;gap:6px;align-items:center;margin:5px 0}
+  .row label{flex:0 0 92px;color:var(--dim)}
+  .row input[type=range]{flex:1}
+  .row .val{flex:0 0 38px;text-align:right;color:var(--accent)}
+  input,button,select{background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+    border-radius:3px;padding:4px 6px;font:inherit}
+  input[type=text]{width:100%}
+  button{cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .chk{display:flex;gap:6px;align-items:center;color:var(--txt)}
+  .chk input{accent-color:var(--accent)}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  #stats{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:8px;font-size:11px}
+  #stats div{display:flex;justify-content:space-between;color:var(--dim)}
+  #stats div b{color:var(--txt);font-weight:500}
+  #stats .ok{color:#6fe89a} #stats .bad{color:var(--red)}
+  #tests{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:8px;font-size:11px;max-height:200px;overflow:auto}
+  #tests .t{margin:2px 0} #tests .t .k{color:var(--dim)}
+  #view{position:relative}
+  canvas{display:block}
+  #legend{position:absolute;left:10px;bottom:10px;background:rgba(10,12,16,.7);
+    border:1px solid var(--line);border-radius:3px;padding:7px 9px;font-size:11px;color:var(--dim)}
+  #legend span{margin-right:10px}
+  #hud{position:absolute;right:10px;top:10px;background:rgba(10,12,16,.7);
+    border:1px solid var(--line);border-radius:3px;padding:6px 9px;font-size:11px;color:var(--accent)}
+  #buildBar{position:absolute;left:50%;transform:translateX(-50%);bottom:12px;
+    background:rgba(10,12,16,.85);border:1px solid var(--line);border-radius:3px;
+    padding:5px 12px;font-size:11px;color:var(--cyan);display:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="panel">
+    <h1>⚰ Dungeon Forge</h1>
+    <div class="row"><label>seed</label><input id="seed" type="text" value="1337"/></div>
+    <div class="btns">
+      <button id="roll">🎲 Roll</button>
+      <button id="gen">▶ Generate</button>
+    </div>
+    <h2>Shape</h2>
+    <div class="row"><label>roomCount</label><input id="roomCount" type="range" min="8" max="80" value="42"/><span class="val" id="roomCount_v">42</span></div>
+    <div class="row"><label>loopChance</label><input id="loopChance" type="range" min="0" max="0.5" step="0.01" value="0.15"/><span class="val" id="loopChance_v">0.15</span></div>
+    <div class="row"><label>decorDensity</label><input id="decorDensity" type="range" min="0" max="1" step="0.05" value="0.6"/><span class="val" id="decorDensity_v">0.60</span></div>
+    <div class="row"><label>theme</label><select id="theme">
+      <option value="crypt">crypt</option><option value="cavern">cavern</option>
+      <option value="catacomb">catacomb</option><option value="inferno">inferno</option>
+    </select></div>
+    <div class="chk"><input id="animateBuild" type="checkbox"/><label for="animateBuild">staged build animation</label></div>
+    <h2>Overlays</h2>
+    <div class="chk"><input id="ov_graph" type="checkbox"/><label>graph (Delaunay/KNN)</label></div>
+    <div class="chk"><input id="ov_mst" type="checkbox" checked/><label>MST</label></div>
+    <div class="chk"><input id="ov_loops" type="checkbox"/><label>loops</label></div>
+    <div class="chk"><input id="ov_critical" type="checkbox" checked/><label>critical path</label></div>
+    <div class="chk"><input id="ov_diff" type="checkbox"/><label>difficulty heatmap</label></div>
+    <h2>Stats</h2>
+    <div id="stats"><div><span>—</span><span></span></div></div>
+    <h2>Acceptance</h2>
+    <div id="tests"></div>
+  </div>
+  <div id="view">
+    <div id="hud">—</div>
+    <div id="legend">
+      <span><i class="sw" style="background:#ff5a5a"></i>critical</span>
+      <span><i class="sw" style="background:#46d6e6"></i>loop</span>
+      <span><i class="sw" style="background:#ff8c3a"></i>torch</span>
+      <span><i class="sw" style="background:#9d7bff"></i>boss</span>
+      <span><i class="sw" style="background:#6fe89a"></i>treasure</span>
+    </div>
+    <div id="buildBar">building…</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.140.0/build/three.min.js"></script>
+<script>
+"use strict";
+/* ============================================================ *
+ *  PROCEDURAL DUNGEON GENERATOR — pure data, zero THREE imports
+ *  Stages: RNG → scatter → separate → graph → semantics →
+ *          carve → rasterize → decorate → metadata
+ * ============================================================ */
+
+// ---- Tile / room constants ----
+const VOID=0, FLOOR=1, WALL=2;
+const SHAPE_RECT=0, SHAPE_ELLIPSE=1, SHAPE_OCTAGON=2;
+const T_COMBAT=0, T_TREASURE=1, T_SHRINE=2, T_ELITE=3, T_BOSS=4, T_ENTRANCE=5;
+
+// ============================================================
+// 1. RNG — mulberry32 threaded through every stage
+// ============================================================
+function mulberry32(seed){
+  let a = seed>>>0;
+  return function(){
+    a|=0; a=(a+0x6D2B79F5)|0;
+    let t=Math.imul(a^(a>>>15),1|a);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t;
+    return ((t^(t>>>14))>>>0)/4294967296;
+  };
+}
+function makeRng(seed){
+  const next = mulberry32(seed);
+  const api = {
+    next,
+    float:(a,b)=> a+(b-a)*next(),
+    int:(a,b)=> Math.floor(a+(b-a+1)*next()),         // inclusive [a,b]
+    pick:(arr)=> arr[Math.floor(next()*arr.length)],
+    chance:(p)=> next()<p,
+    gaussian:(mu,sigma)=>{
+      const u=Math.max(1e-12,next()), v=next();
+      return mu+sigma*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+    },
+    // derive a child stream — used for stage re-rolls
+    derive:(salt)=>{ const s=((next()*4294967296)|0)^(salt>>>0); return makeRng(s>>>0); }
+  };
+  return api;
+}
+
+// FNV-1a 32-bit — deterministic checksum over a string buffer
+function fnv1a(str){
+  let h=0x811c9dc5;
+  for(let i=0;i<str.length;i++){
+    h^=str.charCodeAt(i);
+    h=Math.imul(h,0x01000193);
+  }
+  // to hex
+  return (h>>>0).toString(16).padStart(8,'0');
+}
+
+// ============================================================
+// 2. ROOM SCATTER — ellipse, archetype + shape tables
+// ============================================================
+function scatterRooms(rng, roomCount){
+  const num = Math.ceil(roomCount*1.4);
+  const R = Math.ceil(Math.sqrt(Math.max(1,roomCount))*5.5); // density-stable radius
+  const rooms=[];
+  let largeCount=0;
+  for(let i=0;i<num;i++){
+    const ang=rng.float(0,Math.PI*2);
+    const rad=Math.sqrt(rng.next())*R;
+    const cx=Math.round(Math.cos(ang)*rad);
+    const cy=Math.round(Math.sin(ang)*rad*0.78);       // mild squash
+    // archetype
+    const ar=rng.next();
+    let w,h;
+    if(ar<0.45){ w=rng.int(5,7); h=rng.int(5,7); }            // small 45%
+    else if(ar<0.85){ w=rng.int(8,12); h=rng.int(8,12); }     // medium 40%
+    else { w=rng.int(13,18); h=rng.int(13,18); largeCount++; }// large 15%
+    // shape
+    const sr=rng.next();
+    const shape = sr<0.60?SHAPE_RECT : sr<0.82?SHAPE_ELLIPSE : SHAPE_OCTAGON;
+    rooms.push({id:i,cx,cy,w,h,shape,type:T_COMBAT,depth:0,difficulty:0,degree:0});
+  }
+  // force >= 2 large rooms
+  if(largeCount<2){
+    const nonLarge=rooms.filter(r=>r.w<13).sort((a,b)=>(a.w*a.h)-(b.w*b.h));
+    for(let k=0;k<2 && k<nonLarge.length;k++){
+      const r=nonLarge[nonLarge.length-1-k];
+      r.w=rng.int(13,18); r.h=rng.int(13,18);
+    }
+  }
+  return rooms;
+}
+
+// ============================================================
+// 3. SEPARATION — iterative AABB push-apart, 2-cell padding
+// ============================================================
+function separateRooms(rooms, padding, maxIter){
+  padding = padding==null?2:padding;
+  maxIter = maxIter||200;
+  // spatial grid: cell ≥ max room span + padding so any overlapping pair is in
+  // the same or an adjacent cell (3×3 neighbor scan never misses a pair)
+  let maxSpan=1;
+  for(const r of rooms){ maxSpan=Math.max(maxSpan, r.w, r.h); }
+  const cell=Math.max(1, Math.ceil(maxSpan + padding));
+  const grid=new Map();
+  const key=(cx,cy)=> ((cx|0)+10000)+((cy|0)+10000)*20000;
+  const insert=(r)=>{
+    const kx=Math.floor(r.cx/cell), ky=Math.floor(r.cy/cell);
+    const k=key(kx,ky); let arr=grid.get(k); if(!arr){arr=[];grid.set(k,arr);} arr.push(r);
+  };
+  for(let iter=0; iter<maxIter; iter++){
+    grid.clear();
+    for(const r of rooms) insert(r);
+    let moved=false;
+    for(const a of rooms){
+      const kx=Math.floor(a.cx/cell), ky=Math.floor(a.cy/cell);
+      for(let gy=ky-1; gy<=ky+1; gy++){
+        for(let gx=kx-1; gx<=kx+1; gx++){
+          const arr=grid.get(key(gx,gy));
+          if(!arr) continue;
+          for(const b of arr){
+            if(b===a) continue;
+            const ox=(a.w+b.w)/2+padding-Math.abs(a.cx-b.cx);
+            const oy=(a.h+b.h)/2+padding-Math.abs(a.cy-b.cy);
+            if(ox>0 && oy>0){
+              if(ox<oy){ const s=a.cx<=b.cx?-1:1, p=ox*0.5; a.cx+=s*p; b.cx-=s*p; }
+              else     { const s=a.cy<=b.cy?-1:1, p=oy*0.5; a.cy+=s*p; b.cy-=s*p; }
+              moved=true;
+            }
+          }
+        }
+      }
+    }
+    if(!moved) break;
+  }
+  rooms.forEach(r=>{ r.cx=Math.round(r.cx); r.cy=Math.round(r.cy); });
+}
+
+// cull smallest overflow down to roomCount
+function cullToCount(rooms, roomCount){
+  if(rooms.length<=roomCount) return rooms;
+  rooms.sort((a,b)=>(b.w*b.h)-(a.w*a.h));      // largest first
+  const keep=rooms.slice(0,roomCount);
+  keep.sort((a,b)=>a.id-b.id);                  // restore deterministic order
+  // re-id densely
+  keep.forEach((r,i)=>r.id=i);
+  return keep;
+}
+
+// ============================================================
+// 4. CONNECTIVITY GRAPH — Delaunay w/ KNN fallback → MST → loops
+// ============================================================
+
+// points: [{x,y,id}] aligned so points[i].id === i
+function buildPoints(rooms){
+  return rooms.map(r=>({x:r.cx, y:r.cy, id:r.id}));
+}
+
+// --- Bowyer-Watson Delaunay (primary path) ---
+function inCircumcircle(t, p){
+  const a=t[0], b=t[1], c=t[2];
+  const orient=(b.x-a.x)*(c.y-a.y)-(c.x-a.x)*(b.y-a.y);
+  if(orient===0) return false;             // degenerate / collinear
+  const ax=a.x-p.x, ay=a.y-p.y;
+  const bx=b.x-p.x, by=b.y-p.y;
+  const cx=c.x-p.x, cy=c.y-p.y;
+  const det=(ax*ax+ay*ay)*(bx*cy-cx*by)
+          -(bx*bx+by*by)*(ax*cy-cx*ay)
+          +(cx*cx+cy*cy)*(ax*by-bx*ay);
+  if(!isFinite(det)) return false;
+  return orient>0 ? det>0 : det<0;
+}
+function delaunay(points){
+  // returns {edges:[[a,b],...], tris:n} or throws
+  const n=points.length;
+  if(n<3) throw new Error("too few points");
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const p of points){
+    if(p.x<minX)minX=p.x; if(p.y<minY)minY=p.y;
+    if(p.x>maxX)maxX=p.x; if(p.y>maxY)maxY=p.y;
+  }
+  const dmax=Math.max(maxX-minX, maxY-minY, 1);
+  const midx=(minX+maxX)/2, midy=(minY+maxY)/2;
+  const s0={x:midx-20*dmax, y:midy-dmax,        id:-1};
+  const s1={x:midx,         y:midy+20*dmax,     id:-2};
+  const s2={x:midx+20*dmax, y:midy-dmax,        id:-3};
+  let tris=[[s0,s1,s2]];
+  for(const p of points){
+    const bad=[];
+    for(const t of tris){ if(inCircumcircle(t,p)) bad.push(t); }
+    if(bad.length===0) throw new Error("no bad triangle — degenerate");
+    // boundary of cavity = edges not shared by 2 bad tris
+    const poly=[];
+    for(const t of bad){
+      for(let e=0;e<3;e++){
+        const A=t[e], B=t[(e+1)%3];
+        let shared=false;
+        for(const t2 of bad){
+          if(t2===t) continue;
+          for(let e2=0;e2<3;e2++){
+            const C=t2[e2], D=t2[(e2+1)%3];
+            if((A===C&&B===D)||(A===D&&B===C)){shared=true;break;}
+          }
+          if(shared) break;
+        }
+        if(!shared) poly.push([A,B]);
+      }
+    }
+    tris=tris.filter(t=>bad.indexOf(t)<0);
+    for(const [A,B] of poly) tris.push([A,B,p]);
+  }
+  // collect edges, drop super-triangle verts
+  const seen=new Map();
+  const add=(a,b)=>{
+    if(a.id<0||b.id<0) return;
+    const key=a.id<b.id?a.id*100000+b.id:b.id*100000+a.id;
+    seen.set(key,[Math.min(a.id,b.id),Math.max(a.id,b.id)]);
+  };
+  let realTris=0;
+  for(const t of tris){
+    let ok=true;
+    for(const v of t) if(v.id<0){ok=false;break;}
+    if(ok) realTris++;
+    add(t[0],t[1]); add(t[1],t[2]); add(t[2],t[0]);
+  }
+  if(realTris < n-2) throw new Error("tri count "+realTris+" < "+(n-2));
+  return {edges:Array.from(seen.values()).sort((a,b)=>a[0]-b[0]||a[1]-b[1]), tris:realTris};
+}
+
+// --- KNN fallback (k=4), deterministic ---
+function knnGraph(points, k){
+  k=Math.min(k, points.length-1);
+  const seen=new Map();
+  for(const p of points){
+    const ds=[];
+    for(const q of points){
+      if(q.id===p.id) continue;
+      const dx=p.x-q.x, dy=p.y-q.y;
+      ds.push({id:q.id, d:dx*dx+dy*dy});
+    }
+    ds.sort((a,b)=>a.d-b.d||a.id-b.id);
+    for(let i=0;i<k;i++){
+      const o=ds[i];
+      const key=Math.min(p.id,o.id)*100000+Math.max(p.id,o.id);
+      seen.set(key,[Math.min(p.id,o.id),Math.max(p.id,o.id)]);
+    }
+  }
+  return Array.from(seen.values()).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+}
+
+// --- Prim MST (deterministic: distance, then id tiebreak) ---
+function primMST(n, edges, pts){
+  const visited=new Uint8Array(n);
+  visited[0]=1;
+  const mst=[];
+  for(let it=0; it<n-1; it++){
+    let best=null, bestD=Infinity;
+    for(const e of edges){
+      const va=visited[e[0]], vb=visited[e[1]];
+      if(va===vb) continue;
+      const dx=pts[e[0]].x-pts[e[1]].x, dy=pts[e[0]].y-pts[e[1]].y;
+      const d=dx*dx+dy*dy;
+      if(d<bestD || (d===bestD && best && (e[0]<best[0]||(e[0]===best[0]&&e[1]<best[1])))){
+        bestD=d; best=e;
+      }
+    }
+    if(!best) break;
+    mst.push(best);
+    visited[best[0]]=1; visited[best[1]]=1;
+  }
+  return mst;
+}
+
+function edgeKey(a,b){ return Math.min(a,b)*100000+Math.max(a,b); }
+
+// Add loops from candidate edges (excluding MST), rejecting > maxRatio × avg MST len
+function addLoops(cand, mst, pts, loopChance, rng, maxRatio){
+  const mstSet=new Set(mst.map(e=>edgeKey(e[0],e[1])));
+  const rest=cand.filter(e=>!mstSet.has(edgeKey(e[0],e[1])));
+  let sum=0;
+  for(const e of mst){
+    const dx=pts[e[0]].x-pts[e[1]].x, dy=pts[e[0]].y-pts[e[1]].y;
+    sum+=Math.sqrt(dx*dx+dy*dy);
+  }
+  const avg = mst.length ? sum/mst.length : 1;
+  const loops=[];
+  // sort for determinism before sampling
+  rest.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  for(const e of rest){
+    const dx=pts[e[0]].x-pts[e[1]].x, dy=pts[e[0]].y-pts[e[1]].y;
+    const d=Math.sqrt(dx*dx+dy*dy);
+    if(d > avg*maxRatio) continue;
+    if(rng.chance(loopChance)) loops.push(e);
+  }
+  return loops;
+}
+
+
+
+// Stage 4a: Delaunay/KNN → MST → boss. No entrance, no loops yet.
+function buildMstAndBoss(rooms, rng){
+  const pts = buildPoints(rooms);
+  const n = pts.length;
+  let candidates, usedDelaunay, triCount=0;
+  try{
+    const r = delaunay(pts);
+    candidates = r.edges; usedDelaunay = true; triCount = r.tris;
+  }catch(err){
+    candidates = knnGraph(pts, 4); usedDelaunay = false;
+  }
+  const mst = primMST(n, candidates, pts);
+  const mstDeg=new Int16Array(n);
+  const mstAdj=[]; for(let i=0;i<n;i++) mstAdj.push([]);
+  for(const e of mst){ mstDeg[e[0]]++; mstDeg[e[1]]++; mstAdj[e[0]].push(e[1]); mstAdj[e[1]].push(e[0]); }
+  // Boss = largest area (deterministic tiebreak by id)
+  let boss=rooms[0];
+  for(const r of rooms){ const ar=r.w*r.h, bb=boss.w*boss.h; if(ar>bb||(ar===bb&&r.id<boss.id)) boss=r; }
+  boss.type=T_BOSS;
+  return {pts, candidates, mst, mstAdj, mstDeg, bossId:boss.id, usedDelaunay, triCount, n};
+}
+
+// Stage 4b: add loops AVOIDING entrance (keeps its graph-degree 1); build edges + degrees.
+function finalizeGraph(rooms, mg, entranceId, rng, loopChance){
+  const n=mg.n, pts=mg.pts, mst=mg.mst, candidates=mg.candidates;
+  const loopCands = candidates.filter(e=>e[0]!==entranceId && e[1]!==entranceId);
+  let loops = addLoops(loopCands, mst, pts, loopChance, rng, 2.2);
+  if(loops.length===0){
+    const mstSet=new Set(mst.map(e=>edgeKey(e[0],e[1])));
+    const rest=loopCands.filter(e=>!mstSet.has(edgeKey(e[0],e[1])))
+      .sort((a,b)=>{
+        const da=(pts[a[0]].x-pts[a[1]].x)**2+(pts[a[0]].y-pts[a[1]].y)**2;
+        const db=(pts[b[0]].x-pts[b[1]].x)**2+(pts[b[0]].y-pts[b[1]].y)**2;
+        return da-db;
+      });
+    if(rest.length) loops.push(rest[0]);
+  }
+  const edges=[];
+  for(const e of mst) edges.push({a:e[0], b:e[1], isLoop:false, isCritical:false});
+  for(const e of loops) edges.push({a:e[0], b:e[1], isLoop:true, isCritical:false});
+  edges.sort((a,b)=>a.a-b.a||a.b-b.b);
+  for(const r of rooms) r.degree=0;
+  for(const e of edges){ rooms[e.a].degree++; rooms[e.b].degree++; }
+  const cyclomatic = edges.length - n + 1;
+  return {edges, loopCount:loops.length, cyclomatic, mstCount:mst.length};
+}
+
+// ============================================================
+// 5. SEMANTICS — critical path, treasure/shrine/elite/combat,
+//    difficulty ramp, boss doorway on long-edge center
+// ============================================================
+function graphAdjacency(n, edges){
+  const adj=[]; for(let i=0;i<n;i++) adj.push([]);
+  for(const e of edges){ adj[e.a].push(e.b); adj[e.b].push(e.a); }
+  return adj;
+}
+function bfsPrev(adj, src, n){
+  const dist=new Int16Array(n).fill(-1), prev=new Int32Array(n).fill(-1);
+  dist[src]=0; const q=[src];
+  while(q.length){
+    const u=q.shift();
+    const ns=adj[u].slice().sort((a,b)=>a-b);
+    for(const v of ns){ if(dist[v]<0){ dist[v]=dist[u]+1; prev[v]=u; q.push(v); } }
+  }
+  return {dist, prev};
+}
+
+function assignSemantics(rooms, edges, graph, rng){
+  const n=rooms.length;
+  const adj=graphAdjacency(n, edges);
+  const boss = rooms[graph.bossId];
+  const entrance = rooms[graph.entranceId];
+
+  const {dist, prev} = bfsPrev(adj, entrance.id, n);
+  const critPath=[];
+  let cur=boss.id;
+  while(cur>=0){ critPath.push(cur); cur=prev[cur]; }
+  critPath.reverse();
+  const critSet=new Set(critPath);
+  for(const id of critPath) rooms[id].onCritical=true;
+  for(let i=0;i<critPath.length-1;i++){
+    const a=critPath[i], b=critPath[i+1];
+    for(const e of edges){ if((e.a===a&&e.b===b)||(e.a===b&&e.b===a)){ e.isCritical=true; break; } }
+  }
+
+  const maxDepth = dist[boss.id];
+  for(const r of rooms) r.depth = dist[r.id]<0 ? maxDepth : dist[r.id];
+  for(const r of rooms){
+    if(r.id===boss.id){ r.difficulty=1.0; continue; }
+    if(r.id===entrance.id){ r.difficulty=0.0; continue; }
+    const t = maxDepth>0 ? r.depth/maxDepth : 0;
+    r.difficulty = 0.15 + 0.85*t;
+  }
+
+  // Treasure: leaves (degree 1) that aren't entrance/boss, max 4
+  const leaves = rooms.filter(r=>r.degree===1 && r.id!==entrance.id && r.id!==boss.id)
+    .sort((a,b)=>a.id-b.id);
+  let treasure=0;
+  for(const r of leaves){ if(treasure<4){ r.type=T_TREASURE; treasure++; } }
+
+  // Elite arenas: 1–2 ON critical path at 55–85% depth
+  const eliteTarget = rng.chance(0.5)?2:1;
+  let placed=0;
+  for(const id of critPath){
+    if(placed>=eliteTarget) break;
+    const r=rooms[id];
+    if(r.id===entrance.id||r.id===boss.id) continue;
+    const t = maxDepth>0 ? r.depth/maxDepth : 0;
+    if(t>=0.55 && t<=0.85 && r.type===T_COMBAT){ r.type=T_ELITE; placed++; }
+  }
+
+  // Shrines: 1–2 at mid-depth, OFF critical path
+  const shrineTarget = rng.chance(0.5)?2:1;
+  const offCrit = rooms.filter(r=>!critSet.has(r.id) && r.type===T_COMBAT)
+    .sort((a,b)=>Math.abs(a.depth-maxDepth/2)-Math.abs(b.depth-maxDepth/2) || a.id-b.id);
+  let sp=0;
+  for(const r of offCrit){ if(sp>=shrineTarget) break; r.type=T_SHRINE; sp++; }
+
+  // Boss doorway: long-edge center, facing the critical-path neighbor
+  const bossNeighbor = critPath.length>=2 ? rooms[critPath[critPath.length-2]] : null;
+  if(bossNeighbor){
+    const dx = Math.sign(bossNeighbor.cx - boss.cx);
+    const dy = Math.sign(bossNeighbor.cy - boss.cy);
+    if(boss.w >= boss.h){
+      boss.doorway = {x: boss.cx + (dx>=0?1:-1)*Math.floor(boss.w/2), y: boss.cy};
+    }else{
+      boss.doorway = {x: boss.cx, y: boss.cy + (dy>=0?1:-1)*Math.floor(boss.h/2)};
+    }
+  }else{
+    boss.doorway = {x:boss.cx, y:boss.cy};
+  }
+
+  return {critPath, maxDepth, critSet};
+}
+
+// ============================================================
+// 6. CORRIDOR CARVE — L-corridors, seeded elbow, width by role
+// ============================================================
+function setCell(grid, floorKind, W, H, x, y, kind, fk){
+  if(x<0||y<0||x>=W||y>=H) return;
+  const i = y*W+x;
+  if(grid[i]===FLOOR && floorKind[i]===1 && fk===2) return; // don't overwrite room with corridor
+  grid[i] = kind;
+  if(floorKind) floorKind[i] = fk;
+}
+
+// stamp an axis-aligned line with a square brush (all grid-local).
+// If skipMask is provided, cells inside it are NOT stamped (left VOID→WALL),
+// so non-boss corridors that must cross the boss 2-ring gap instead of piercing.
+function stampLine(grid, floorKind, W, H, x0,y0, x1,y1, width, corridorCells, skipMask){
+  const r = Math.floor(width/2);
+  if(x0===x1){
+    const lo=Math.min(y0,y1), hi=Math.max(y0,y1);
+    for(let y=lo;y<=hi;y++) for(let d=-r; d<=r; d++){
+      const x=x0+d;
+      if(skipMask && x>=0&&y>=0&&x<W&&y<H && skipMask[y*W+x]) continue;
+      setCell(grid,floorKind,W,H,x,y,FLOOR,2);
+      if(corridorCells && d===0) corridorCells.push({x,y});
+    }
+  }else if(y0===y1){
+    const lo=Math.min(x0,x1), hi=Math.max(x0,x1);
+    for(let x=lo;x<=hi;x++) for(let d=-r; d<=r; d++){
+      const y=y0+d;
+      if(skipMask && x>=0&&y>=0&&x<W&&y<H && skipMask[y*W+x]) continue;
+      setCell(grid,floorKind,W,H,x,y,FLOOR,2);
+      if(corridorCells && d===0) corridorCells.push({x,y});
+    }
+  }
+}
+
+// count avoid-mask hits along an axis-aligned segment centerline
+function countPierce(x0,y0,x1,y1, avoid, W, H){
+  let c=0;
+  if(x0===x1){ const lo=Math.min(y0,y1),hi=Math.max(y0,y1); for(let y=lo;y<=hi;y++){ if(x0>=0&&y>=0&&x0<W&&y<H&&avoid[y*W+x0]) c++; } }
+  else { const lo=Math.min(x0,x1),hi=Math.max(x0,x1); for(let x=lo;x<=hi;x++){ if(x>=0&&y0>=0&&x<W&&y0<H&&avoid[y0*W+x]) c++; } }
+  return c;
+}
+
+function carveCorridor(grid, floorKind, W, H, ra, rb, width, rng, corridorCells, avoid, skipMask){
+  // If one endpoint has a doorway (boss), make it `a` so the L anchors on the
+  // doorway — otherwise the first segment can run through the boss and pierce
+  // its 2-thick wall on the perpendicular edge.
+  let a=ra, b=rb;
+  if(rb.doorway && !ra.doorway){ a=rb; b=ra; }
+  const ax = a.doorway ? a.doorway.x : a.cx;
+  const ay = a.doorway ? a.doorway.y : a.cy;
+  const bx = b.cx, by = b.cy;
+  if(ax===bx || ay===by){ stampLine(grid,floorKind,W,H, ax,ay, bx,by, width, corridorCells, skipMask||null); return; }
+
+  if(a.doorway){
+    // boss doorway: run first segment ALONG the doorway edge (clears perp 2-ring)
+    const horizFirst = Math.sign(a.doorway.x - a.cx) === 0;     // N/S doorway → horiz first
+    const mx = horizFirst ? bx : ax, my = horizFirst ? ay : by;
+    stampLine(grid,floorKind,W,H, ax,ay, mx,my, width, corridorCells, skipMask||null);
+    stampLine(grid,floorKind,W,H, mx,my, bx,by, width, corridorCells, skipMask||null);
+    return;
+  }
+
+  // non-boss corridor: pick the L elbow that avoids the boss 2-ring; if both
+  // elbows pierce, detour around the 2-ring AABB (2 elbows, still spec-legal).
+  // skipMask gaps any cell that would still land in the 2-ring (keeps walls 2-thick;
+  // a gapped corridor fails flood-fill → re-roll with a clearer layout).
+  let horizFirst = rng.chance(0.5);
+  const M = avoid && avoid.mask;
+  if(M){
+    const h = countPierce(ax,ay,bx,ay, M,W,H) + countPierce(bx,ay,bx,by, M,W,H);
+    const v = countPierce(ax,ay,ax,by, M,W,H) + countPierce(ax,by,bx,by, M,W,H);
+    if(h>0 && v>0){
+      const cands = [
+        [ax,ay, ax,avoid.y0-1, bx,avoid.y0-1, bx,by],
+        [ax,ay, ax,avoid.y1+1, bx,avoid.y1+1, bx,by],
+        [ax,ay, avoid.x0-1,ay, avoid.x0-1,by, bx,by],
+        [ax,ay, avoid.x1+1,ay, avoid.x1+1,by, bx,by],
+      ];
+      let best=null, bestC=Math.min(h,v);
+      for(const d of cands){
+        const c = countPierce(d[0],d[1],d[2],d[3], M,W,H)
+                + countPierce(d[2],d[3],d[4],d[5], M,W,H)
+                + countPierce(d[4],d[5],d[6],d[7], M,W,H);
+        if(c<bestC){ bestC=c; best=d; }
+      }
+      if(best){
+        stampLine(grid,floorKind,W,H, best[0],best[1], best[2],best[3], width, corridorCells, skipMask||null);
+        stampLine(grid,floorKind,W,H, best[2],best[3], best[4],best[5], width, corridorCells, skipMask||null);
+        stampLine(grid,floorKind,W,H, best[4],best[5], best[6],best[7], width, corridorCells, skipMask||null);
+        return;
+      }
+    }
+    if(h !== v) horizFirst = h < v;
+  }
+  const mx = horizFirst ? bx : ax, my = horizFirst ? ay : by;
+  stampLine(grid,floorKind,W,H, ax,ay, mx,my, width, corridorCells, skipMask||null);
+  stampLine(grid,floorKind,W,H, mx,my, bx,by, width, corridorCells, skipMask||null);
+}
+
+// ============================================================
+// 7. RASTERIZE — rooms → floor, walls, doorway detection, BFS field
+// ============================================================
+function inRoomShape(r, x, y){
+  const dx = x - r.cx, dy = y - r.cy;
+  const hw = r.w/2, hh = r.h/2;
+  if(r.shape===SHAPE_RECT){
+    return Math.abs(dx) <= hw && Math.abs(dy) <= hh;
+  }else if(r.shape===SHAPE_ELLIPSE){
+    if(hw<0.5||hh<0.5) return Math.abs(dx)<=hw && Math.abs(dy)<=hh;
+    return (dx*dx)/(hw*hw) + (dy*dy)/(hh*hh) <= 1.0;
+  }else{ // chamfered octagon
+    const chamf = Math.max(1, Math.floor(Math.min(r.w,r.h)/4));
+    return Math.abs(dx)<=hw && Math.abs(dy)<=hh &&
+           !(Math.abs(dx)>hw-chamf && Math.abs(dy)>hh-chamf);
+  }
+}
+
+function stampRooms(grid, floorKind, W, H, rooms){
+  for(const r of rooms){
+    const x0=Math.floor(r.cx-r.w/2-1), x1=Math.ceil(r.cx+r.w/2+1);
+    const y0=Math.floor(r.cy-r.h/2-1), y1=Math.ceil(r.cy+r.h/2+1);
+    for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+      if(inRoomShape(r,x,y)) setCell(grid,floorKind,W,H, x,y, FLOOR, 1);
+    }
+  }
+}
+
+// WALL = VOID cell with any 8-neighbor FLOOR. Boss gets 2-thick walls.
+function buildWalls(grid, floorKind, W, H, bossFloorMask){
+  // 1-thick everywhere
+  const wallNext = new Uint8Array(W*H);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const i=y*W+x;
+    if(grid[i]!==VOID) continue;
+    let near=false;
+    for(let dy=-1;dy<=1&&!near;dy++) for(let dx=-1;dx<=1;dx++){
+      if(dx===0&&dy===0) continue;
+      const nx=x+dx, ny=y+dy;
+      if(nx<0||ny<0||nx>=W||ny>=H) continue;
+      if(grid[ny*W+nx]===FLOOR){ near=true; break; }
+    }
+    if(near) wallNext[i]=1;
+  }
+  for(let i=0;i<grid.length;i++) if(wallNext[i]) grid[i]=WALL;
+
+  // Boss 2nd ring — only scan the boss AABB ±2 (not the whole grid)
+  let bx0=Infinity,by0=Infinity,bx1=-1,by1=-1;
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){ if(bossFloorMask[y*W+x]){ if(x<bx0)bx0=x; if(x>bx1)bx1=x; if(y<by0)by0=y; if(y>by1)by1=y; } }
+  if(isFinite(bx0)){
+    const y0=Math.max(0,by0-2), y1=Math.min(H-1,by1+2);
+    const x0=Math.max(0,bx0-2), x1=Math.min(W-1,bx1+2);
+    for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+      const i=y*W+x;
+      if(grid[i]!==VOID) continue;
+      let near=false;
+      for(let dy=-2;dy<=2&&!near;dy++) for(let dx=-2;dx<=2;dx++){
+        const nx=x+dx, ny=y+dy;
+        if(nx<x0-2||nx>x1+2||ny<y0-2||ny>y1+2) continue; // stay in bounds (clamped above)
+        if(nx<0||ny<0||nx>=W||ny>=H) continue;
+        if(bossFloorMask[ny*W+nx]){ near=true; break; }
+      }
+      if(near) grid[i]=WALL;
+    }
+  }
+}
+
+// Doorways = corridor cells 4-adjacent to a room-floor cell
+function findDoorways(grid, floorKind, W, H, corridorCells){
+  const seen=new Map();
+  const out=[];
+  for(const c of corridorCells){
+    const i=c.y*W+c.x;
+    if(floorKind[i]!==2) continue;
+    const nbrs=[[1,0],[-1,0],[0,1],[0,-1]];
+    let adjRoom=false;
+    for(const [dx,dy] of nbrs){
+      const nx=c.x+dx, ny=c.y+dy;
+      if(nx<0||ny<0||nx>=W||ny>=H) continue;
+      if(floorKind[ny*W+nx]===1){ adjRoom=true; break; }
+    }
+    if(adjRoom){
+      const key=c.x*100000+c.y;
+      if(!seen.has(key)){ seen.set(key,1); out.push({x:c.x,y:c.y}); }
+    }
+  }
+  out.sort((a,b)=>a.x-b.x||a.y-b.y);
+  return out;
+}
+
+// BFS distance field over FLOOR from entrance cell (4-adjacency). -1 = non-floor.
+function bfsFloorField(grid, W, H, entrance){
+  const bfs=new Int16Array(W*H).fill(-1);
+  const sx=entrance.x, sy=entrance.y;
+  if(sx<0||sy<0||sx>=W||sy>=H) return bfs;
+  const start=sy*W+sx;
+  if(grid[start]!==FLOOR) return bfs; // caller will catch this as failure
+  bfs[start]=0;
+  const q=[start]; let head=0;
+  while(head<q.length){
+    const i=q[head++];
+    const x=i%W, y=(i/W)|0;
+    const d=bfs[i];
+    const nbrs=[[1,0],[-1,0],[0,1],[0,-1]];
+    for(const [dx,dy] of nbrs){
+      const nx=x+dx, ny=y+dy;
+      if(nx<0||ny<0||nx>=W||ny>=H) continue;
+      const ni=ny*W+nx;
+      if(grid[ni]===FLOOR && bfs[ni]<0){ bfs[ni]=d+1; q.push(ni); }
+    }
+  }
+  return bfs;
+}
+
+// ============================================================
+// 8. DECORATION — reserved-mask protocol (doorways→props→spawns→lights)
+// ============================================================
+const PROP_PILLAR=0, PROP_TORCH=1, PROP_DEBRIS=2, PROP_BRAZIER=3,
+      PROP_CHEST=4, PROP_CRYSTAL=5, PROP_PORTAL=6;
+
+function gAt(grid,W,H,x,y){ if(x<0||y<0||x>=W||y>=H) return VOID; return grid[y*W+x]; }
+function fkAt(fk,W,H,x,y){ if(x<0||y<0||x>=W||y>=H) return 0; return fk[y*W+x]; }
+
+function reserveAt(mask,W,H,x,y){
+  if(x<0||y<0||x>=W||y>=H) return false;
+  const i=y*W+x; if(mask[i]) return false; mask[i]=1; return true;
+}
+function isFree(mask,grid,W,H,x,y){
+  if(x<0||y<0||x>=W||y>=H) return false;
+  return !mask[y*W+x] && grid[y*W+x]===FLOOR;
+}
+// try exact, else jitter within radius (≤3), 10 attempts
+function placeNear(mask,grid,W,H,x,y,radius,rng){
+  if(isFree(mask,grid,W,H,x,y)){ reserveAt(mask,W,H,x,y); return {x,y}; }
+  for(let t=0;t<10;t++){
+    const rx=x+rng.int(-radius,radius), ry=y+rng.int(-radius,radius);
+    if(isFree(mask,grid,W,H,rx,ry)){ reserveAt(mask,W,H,rx,ry); return {x:rx,y:ry}; }
+  }
+  return null;
+}
+
+function decorate(rooms, grid, floorKind, W, H, doorways, bfs, decorDensity, rng){
+  const mask = new Uint8Array(W*H);
+  const props=[], spawns=[], lights=[];
+
+  // (a) register doorways first — never cover
+  for(const d of doorways){ reserveAt(mask,W,H,d.x,d.y); for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) reserveAt(mask,W,H,d.x+dx,d.y+dy); }
+
+  // (b) props — pillars in large rooms
+  for(const r of rooms){
+    if(r.w<13 || r.h<13) continue;
+    const step=3;
+    for(let yy=r.cy-Math.floor(r.h/2)+2; yy<=r.cy+Math.floor(r.h/2)-2; yy+=step){
+      for(let xx=r.cx-Math.floor(r.w/2)+2; xx<=r.cx+Math.floor(r.w/2)-2; xx+=step){
+        const lx=xx, ly=yy;
+        if(gAt(grid,W,H,lx,ly)!==FLOOR) continue;
+        // all 8 neighbors floor
+        let ok=true;
+        for(let dy=-1;dy<=1&&ok;dy++) for(let dx=-1;dx<=1;dx++){ if(dx===0&&dy===0) continue; if(gAt(grid,W,H,lx+dx,ly+dy)!==FLOOR){ok=false;break;} }
+        if(!ok) continue;
+        // ≥2 from any doorway
+        let nearDoor=false;
+        for(const d of doorways){ if(Math.max(Math.abs(lx-d.x),Math.abs(ly-d.y))<2){nearDoor=true;break;} }
+        if(nearDoor) continue;
+        const p=placeNear(mask,grid,W,H,lx,ly,1,rng);
+        if(p) props.push({kind:PROP_PILLAR,x:p.x,y:p.y,rot:rng.float(0,6.28),scale:rng.float(0.9,1.1),roomId:r.id});
+      }
+    }
+  }
+
+  // (c) torches on floor-facing walls, Chebyshev spacing ≥ 4 (O(1) occupancy grid)
+  const torchPos=[];
+  const torchGrid=new Uint8Array(W*H);
+  const markTorch=(x,y)=>{ for(let dy=-3;dy<=3;dy++) for(let dx=-3;dx<=3;dx++){ const nx=x+dx,ny=y+dy; if(nx<0||ny<0||nx>=W||ny>=H) continue; torchGrid[ny*W+nx]=1; } };
+  for(const r of rooms){
+    const x0=Math.floor(r.cx-r.w/2-1), x1=Math.ceil(r.cx+r.w/2+1);
+    const y0=Math.floor(r.cy-r.h/2-1), y1=Math.ceil(r.cy+r.h/2+1);
+    const cands=[];
+    for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+      if(gAt(grid,W,H,x,y)!==FLOOR) continue;
+      if(floorKind[y*W+x]!==1) continue; // room floor only
+      // floor cell adjacent to a wall?
+      let adjWall=false;
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ if(gAt(grid,W,H,x+dx,y+dy)===WALL){adjWall=true;break;} }
+      if(adjWall) cands.push({x,y});
+    }
+    cands.sort((a,b)=>a.x-b.x||a.y-b.y);
+    const target = Math.max(2, Math.floor(Math.min(r.w,r.h)/3));
+    let placed=0;
+    for(const c of cands){
+      if(placed>=target) break;
+      if(torchGrid[c.y*W+c.x]) continue;       // within Chebyshev 4 of an existing torch
+      const p=placeNear(mask,grid,W,H,c.x,c.y,1,rng);
+      if(p){ torchPos.push(p); markTorch(p.x,p.y); props.push({kind:PROP_TORCH,x:p.x,y:p.y,rot:0,scale:1,roomId:r.id}); placed++; }
+    }
+  }
+
+  // (d) debris — density ∝ decorDensity, higher in low-difficulty rooms
+  for(const r of rooms){
+    const dprob = decorDensity * (1.0 - 0.6*r.difficulty);
+    const x0=Math.floor(r.cx-r.w/2), x1=Math.ceil(r.cx+r.w/2);
+    const y0=Math.floor(r.cy-r.h/2), y1=Math.ceil(r.cy+r.h/2);
+    for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+      if(rng.chance(dprob*0.08)){
+        const p=placeNear(mask,grid,W,H,x,y,2,rng);
+        if(p) props.push({kind:PROP_DEBRIS,x:p.x,y:p.y,rot:rng.float(0,6.28),scale:rng.float(0.5,1.2),roomId:r.id});
+      }
+    }
+  }
+
+  // (e) braziers ringing boss arena
+  for(const r of rooms){
+    if(r.type!==T_BOSS) continue;
+    const cx=r.cx, cy=r.cy;
+    const ringR = Math.max(r.w,r.h)/2 + 1;
+    for(let a=0;a<8;a++){
+      const ang=a*(Math.PI*2/8);
+      const bx=Math.round(cx+Math.cos(ang)*ringR), by=Math.round(cy+Math.sin(ang)*ringR);
+      const p=placeNear(mask,grid,W,H,bx,by,2,rng);
+      if(p){ props.push({kind:PROP_BRAZIER,x:p.x,y:p.y,rot:0,scale:1,roomId:r.id}); torchPos.push(p); }
+    }
+  }
+
+  // (f) one chest per treasure room
+  for(const r of rooms){
+    if(r.type!==T_TREASURE) continue;
+    const p=placeNear(mask,grid,W,H,r.cx,r.cy,2,rng);
+    if(p) props.push({kind:PROP_CHEST,x:p.x,y:p.y,rot:rng.float(0,6.28),scale:1,roomId:r.id});
+  }
+  // (g) shrine crystal
+  for(const r of rooms){
+    if(r.type!==T_SHRINE) continue;
+    const p=placeNear(mask,grid,W,H,r.cx,r.cy,2,rng);
+    if(p) props.push({kind:PROP_CRYSTAL,x:p.x,y:p.y,rot:0,scale:1,roomId:r.id});
+  }
+  // (h) entrance portal ring
+  for(const r of rooms){
+    if(r.type!==T_ENTRANCE) continue;
+    for(let a=0;a<6;a++){
+      const ang=a*(Math.PI*2/6);
+      const px=Math.round(r.cx+Math.cos(ang)*2), py=Math.round(r.cy+Math.sin(ang)*2);
+      const p=placeNear(mask,grid,W,H,px,py,1,rng);
+      if(p) props.push({kind:PROP_PORTAL,x:p.x,y:p.y,rot:ang,scale:1,roomId:r.id});
+    }
+    lights.push({x:r.cx,y:r.y||r.cy,color:0x6fe8ff,dist:8}); // entrance key light
+  }
+
+  // (i) enemy spawns — combat/elite only, never on prop/doorway
+  for(const r of rooms){
+    if(r.type!==T_COMBAT && r.type!==T_ELITE) continue;
+    const area=r.w*r.h;
+    const count=Math.round(area/18 * (0.5+r.difficulty));
+    const x0=Math.floor(r.cx-r.w/2), x1=Math.ceil(r.cx+r.w/2);
+    const y0=Math.floor(r.cy-r.h/2), y1=Math.ceil(r.cy+r.h/2);
+    let placed=0, tries=0;
+    while(placed<count && tries<count*20){
+      tries++;
+      const x=rng.int(x0,x1), y=rng.int(y0,y1);
+      const p=placeNear(mask,grid,W,H,x,y,3,rng);
+      if(p){ spawns.push({x:p.x,y:p.y,tier:r.type===T_ELITE?2:1,roomId:r.id}); placed++; }
+    }
+  }
+
+  // (j) lights — farthest-point-sample torches/braziers to budget (≤12)
+  const tpos = props.filter(p=>p.kind===PROP_TORCH||p.kind===PROP_BRAZIER).map(p=>({x:p.x,y:p.y}));
+  const sampled = farthestPointSample(tpos, 12);
+  for(const s of sampled) lights.push({x:s.x,y:s.y,color:0xff8c3a,dist:9});
+  // boss + shrine key lights
+  for(const r of rooms){
+    if(r.type===T_BOSS) lights.push({x:r.cx,y:r.cy,color:0x9d7bff,dist:12});
+    if(r.type===T_SHRINE) lights.push({x:r.cx,y:r.cy,color:0x6fe89a,dist:8});
+  }
+  // cap to 12 dynamic point lights total
+  lights.sort((a,b)=> (b.dist) - (a.dist));
+  const cappedLights = lights.slice(0,12);
+
+  return {props, spawns, lights: cappedLights};
+}
+
+function farthestPointSample(points, k){
+  if(points.length<=k) return points.slice();
+  const chosen=[points[0]];
+  const dists=points.map(p=>Math.hypot(p.x-points[0].x,p.y-points[0].y));
+  while(chosen.length<k){
+    let bi=-1, bd=-1;
+    for(let i=0;i<points.length;i++){ if(dists[i]>bd){bd=dists[i];bi=i;} }
+    if(bi<0) break;
+    const bp=points[bi]; chosen.push(bp);
+    for(let i=0;i<points.length;i++){ const d=Math.hypot(points[i].x-bp.x,points[i].y-bp.y); if(d<dists[i]) dists[i]=d; }
+  }
+  return chosen;
+}
+
+// ============================================================
+// 9. METADATA — seeded name, checksum, crop to floor AABB
+// ============================================================
+const NAME_TABLES = {
+  crypt:    {pre:["The Ashen","The Hollow","The Cursed","The Shrouded","The Pale"],   core:["Vaults","Crypts","Tombs","Catacombs","Ossuary"], suf:["of Vor'gul","of the Lost","of Karnath","of Eld","of the Unmaker"]},
+  cavern:   {pre:["The Sunken","The Dripping","The Deep","The Fungal","The Whispering"],core:["Caverns","Grottoes","Depths","Hollows","Lair"], suf:["of Thar'gol","of the Mire","of the Old Worm","of Stone","of the Drowned"]},
+  catacomb: {pre:["The Forgotten","The Sealed","The Bleeding","The Votive","The Endless"],core:["Catacombs","Mausoleum","Necropolis","Ossuary","Halls"], suf:["of the Pale King","of Saints","of the Veil","of Ash","of Locris"]},
+  inferno:  {pre:["The Burning","The Molten","The Ashen","The Screaming","The Furnace"], core:["Pits","Forge","Crucible","Lair","Halls"], suf:["of the Unmaker","of Pyr","of Cinders","of the Lost Flame","of Vex'tul"]}
+};
+function generateName(rng, theme){
+  const t=NAME_TABLES[theme]||NAME_TABLES.crypt;
+  return rng.pick(t.pre)+" "+rng.pick(t.core)+" "+rng.pick(t.suf);
+}
+
+function computeChecksum(grid, W, H, rooms, edges){
+  let s=W+","+H+";";
+  for(let i=0;i<grid.length;i++) s+=grid[i];
+  s+="|R:";
+  for(const r of rooms) s+=r.id+":"+r.cx+","+r.cy+","+r.w+","+r.h+","+r.type+";";
+  s+="|E:";
+  for(const e of edges) s+=e.a+"-"+e.b+";";
+  return fnv1a(s);
+}
+
+function cropToFloor(grid, floorKind, bfs, decor, doorways, corridorCells, W, H, rooms){
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const c=grid[y*W+x];
+    if(c===FLOOR||c===WALL){ if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
+  }
+  if(!isFinite(minX)) return null;
+  const pad=1;
+  minX=Math.max(0,minX-pad); minY=Math.max(0,minY-pad);
+  maxX=Math.min(W-1,maxX+pad); maxY=Math.min(H-1,maxY+pad);
+  const nW=Math.min(256, maxX-minX+1), nH=Math.min(256, maxY-minY+1);
+  const nGrid=new Uint8Array(nW*nH), nFk=new Uint8Array(nW*nH), nBfs=new Int16Array(nW*nH);
+  for(let y=0;y<nH;y++) for(let x=0;x<nW;x++){
+    const si=(y+minY)*W+(x+minX), ti=y*nW+x;
+    nGrid[ti]=grid[si]; nFk[ti]=floorKind[si]; nBfs[ti]=bfs[si];
+  }
+  // everything is grid-local → shift uniformly by (minX,minY)
+  const glx=minX, gly=minY;
+  for(const r of rooms){ r.cx-=glx; r.cy-=gly; if(r.doorway){r.doorway.x-=glx;r.doorway.y-=gly;} }
+  for(const d of doorways){ d.x-=glx; d.y-=gly; }
+  for(const c of corridorCells){ c.x-=glx; c.y-=gly; }
+  for(const pr of decor.props){ pr.x-=glx; pr.y-=gly; }
+  for(const sp of decor.spawns){ sp.x-=glx; sp.y-=gly; }
+  for(const l of decor.lights){ l.x-=glx; l.y-=gly; }
+  return {grid:nGrid, floorKind:nFk, bfs:nBfs, W:nW, H:nH};
+}
+
+// ============================================================
+// ORCHESTRATOR — staged validation, re-roll on failure (max 5),
+// safe fallback layout. Returns Dungeon.
+// ============================================================
+function generateOnce(rng, p, t0){
+  // 2. scatter + cull (cull before separate — w/h fixed at scatter time)
+  let rooms = scatterRooms(rng, p.roomCount);
+  if(rooms.length===0) throw new Error("scatter empty");
+  rooms = cullToCount(rooms, p.roomCount);
+  if(rooms.length<3) throw new Error("cull too few: "+rooms.length);
+  // 3. separate (padding 3 guarantees boss a 2-cell wall buffer)
+  separateRooms(rooms, 3, 200);
+  for(const r of rooms){ if(!isFinite(r.cx)||!isFinite(r.cy)) throw new Error("NaN room center"); }
+
+  // 4a. MST + boss (no entrance/loops yet)
+  const mg = buildMstAndBoss(rooms, rng);
+  const boss = rooms[mg.bossId];
+
+  // bounds + shift to grid-local
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const r of rooms){
+    minX=Math.min(minX, r.cx-r.w/2); maxX=Math.max(maxX, r.cx+r.w/2);
+    minY=Math.min(minY, r.cy-r.h/2); maxY=Math.max(maxY, r.cy+r.h/2);
+  }
+  const margin=10;
+  const ox=Math.floor(minX-margin), oy=Math.floor(minY-margin);
+  const W=Math.min(256, Math.ceil(maxX-minX+2*margin));
+  const H=Math.min(256, Math.ceil(maxY-minY+2*margin));
+  for(const r of rooms){ r.cx-=ox; r.cy-=oy; }
+
+  // provisional carve: rooms + MST corridors from centers (for BFS from boss)
+  let grid=new Uint8Array(W*H), floorKind=new Uint8Array(W*H);
+  stampRooms(grid, floorKind, W, H, rooms);
+  const provCorr=[];
+  for(const e of mg.mst){ carveCorridor(grid, floorKind, W, H, rooms[e[0]], rooms[e[1]], 2, rng, provCorr); }
+  const bfsBoss = bfsFloorField(grid, W, H, {x:boss.cx, y:boss.cy});
+
+  // entrance = MST-leaf farthest from boss by CELL distance; tiebreak smallest id
+  let entrance=null, entranceD=-1;
+  for(const r of rooms){
+    if(mg.mstDeg[r.id]!==1 || r.id===boss.id) continue;
+    const d = bfsBoss[r.cy*W+r.cx];
+    if(d<0) continue;
+    if(d>entranceD || (d===entranceD && (!entrance || r.id<entrance.id))){ entranceD=d; entrance=r; }
+  }
+  if(!entrance){
+    let minDg=Infinity;
+    for(const r of rooms){ if(r.id===boss.id) continue; if(mg.mstDeg[r.id]<minDg||(mg.mstDeg[r.id]===minDg&&(!entrance||r.id<entrance.id))){minDg=mg.mstDeg[r.id]; entrance=r;} }
+  }
+  entrance.type=T_ENTRANCE;
+
+  // 4b. add loops avoiding entrance; build edges
+  const fg = finalizeGraph(rooms, mg, entrance.id, rng, p.loopChance);
+  const edges = fg.edges;
+  for(const e of edges){ if(e.a===e.b) throw new Error("self-edge "+e.a); }
+  if(fg.cyclomatic<1) throw new Error("no cycles");
+  if(edges.length < rooms.length-1) throw new Error("disconnected MST");
+
+  // 5. semantics — sets critical path, room types, difficulty, BOSS DOORWAY
+  const sem = assignSemantics(rooms, edges, {bossId:boss.id, entranceId:entrance.id}, rng);
+
+  // 6+7. FINAL carve: reset grid, stamp rooms, carve all edges (boss edge uses doorway)
+  grid = new Uint8Array(W*H); floorKind = new Uint8Array(W*H);
+  stampRooms(grid, floorKind, W, H, rooms);
+  // boss floor + 2-ring masks (from room shape) so non-boss corridors can avoid the 2-ring
+  const bossFloorMask=new Uint8Array(W*H);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){ if(inRoomShape(boss,x,y)) bossFloorMask[y*W+x]=1; }
+  const boss2ring=new Uint8Array(W*H);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    if(bossFloorMask[y*W+x]) continue;
+    for(let dy=-2;dy<=2;dy++) for(let dx=-2;dx<=2;dx++){
+      const nx=x+dx,ny=y+dy; if(nx<0||ny<0||nx>=W||ny>=H) continue;
+      if(bossFloorMask[ny*W+nx]){ boss2ring[y*W+x]=1; break; }
+    }
+  }
+  const avoid = { mask:boss2ring,
+    x0: boss.cx-Math.floor(boss.w/2)-2, x1: boss.cx+Math.floor(boss.w/2)+2,
+    y0: boss.cy-Math.floor(boss.h/2)-2, y1: boss.cy+Math.floor(boss.h/2)+2 };
+  const corridorCells=[];
+  for(const e of edges){
+    const ra=rooms[e.a], rb=rooms[e.b];
+    const width = e.isCritical?3:2;
+    // the boss's CRITICAL edge must stay open (it's the arena entrance); all
+    // other edges gap any cell in the 2-ring so the boss walls stay 2-thick.
+    const isBossCrit = (e.a===boss.id||e.b===boss.id) && e.isCritical;
+    const skipM = isBossCrit ? null : boss2ring;
+    carveCorridor(grid, floorKind, W, H, ra, rb, width, rng, corridorCells, avoid, skipM);
+  }
+  buildWalls(grid, floorKind, W, H, bossFloorMask);
+  const doorways=findDoorways(grid, floorKind, W, H, corridorCells);
+  const bfs=bfsFloorField(grid, W, H, {x:entrance.cx, y:entrance.cy});
+
+  let floorCount=0, reached=0;
+  for(let i=0;i<grid.length;i++){ if(grid[i]===FLOOR){ floorCount++; if(bfs[i]>=0) reached++; } }
+  const flood = floorCount>0? reached/floorCount : 0;
+  if(flood<1.0) throw new Error("flood "+(flood*100).toFixed(1)+"%");
+
+  // 8. decorate
+  const decor=decorate(rooms, grid, floorKind, W, H, doorways, bfs, p.decorDensity, rng);
+
+  // crop
+  const crop=cropToFloor(grid, floorKind, bfs, decor, doorways, corridorCells, W, H, rooms);
+  if(!crop) throw new Error("empty crop");
+
+  // 9. metadata + boss-depth guard (retry if boss < 60% of max depth)
+  const name=generateName(rng, p.theme);
+  const checksum=computeChecksum(crop.grid, crop.W, crop.H, rooms, edges);
+  const genMs = performance.now()-t0;
+  let floorTiles=0, wallTiles=0;
+  for(let i=0;i<crop.grid.length;i++){ if(crop.grid[i]===FLOOR) floorTiles++; else if(crop.grid[i]===WALL) wallTiles++; }
+  const bossCell = boss.cy*crop.W + boss.cx;
+  const bossDepth = crop.bfs[bossCell];
+  let maxBfs=0; for(let i=0;i<crop.bfs.length;i++) if(crop.bfs[i]>maxBfs) maxBfs=crop.bfs[i];
+  if(bossDepth < 0.6*maxBfs) throw new Error("bossDepth "+bossDepth+"/"+maxBfs+" <60%");
+
+  return {
+    params:p, name,
+    W:crop.W, H:crop.H,
+    grid:crop.grid, bfs:crop.bfs, floorKind:crop.floorKind,
+    rooms, edges, doorways, corridorCells,
+    props:decor.props, spawns:decor.spawns, lights:decor.lights,
+    critPath: sem.critPath,
+    stats:{
+      rooms:rooms.length, edges:edges.length, loops:fg.loopCount,
+      cyclomatic:fg.cyclomatic, criticalLength:sem.critPath.length,
+      floorTiles, wallTiles, props:decor.props.length, spawns:decor.spawns.length,
+      lights:decor.lights.length, flood:100, usedDelaunay:mg.usedDelaunay, triCount:mg.triCount,
+      bossId:boss.id, entranceId:entrance.id, bossDepth, maxBfs,
+      bossDoorway: boss.doorway||null, checksum, genMs
+    }
+  };
+}
+
+function generateDungeon(params){
+  const t0=performance.now();
+  const seed=((params.seed||1)>>>0);
+  const p={
+    seed, roomCount:Math.max(3,params.roomCount||42),
+    loopChance:params.loopChance==null?0.15:params.loopChance,
+    decorDensity:params.decorDensity==null?0.6:params.decorDensity,
+    theme:params.theme||'crypt'
+  };
+  let lastErr=null;
+  for(let attempt=1; attempt<=5; attempt++){
+    const stageSeed = ((seed + attempt*0x9E3779B1)>>>0);
+    const rng = makeRng(stageSeed);
+    const attemptT0 = performance.now();      // genMs = successful attempt only
+    try{
+      const d = generateOnce(rng, p, attemptT0);
+      if(d && d.stats.flood===100) return d;
+      lastErr = new Error("flood<100");
+    }catch(e){ lastErr=e; }
+  }
+  return safeFallback(p, performance.now(), lastErr);
+}
+
+// Safe fallback: deterministic 4-room layout — never fails to ship a Dungeon
+function safeFallback(p, t0, err){
+  const rng = makeRng((p.seed ^ 0xDEADBEEF)>>>0);
+  const rooms=[
+    {id:0,cx:6, cy:6, w:7,h:7,shape:SHAPE_RECT,type:T_ENTRANCE,depth:0,difficulty:0,degree:1},
+    {id:1,cx:18,cy:6, w:7,h:7,shape:SHAPE_RECT,type:T_COMBAT, depth:1,difficulty:0.3,degree:2},
+    {id:2,cx:6, cy:18,w:7,h:7,shape:SHAPE_RECT,type:T_COMBAT, depth:1,difficulty:0.3,degree:2},
+    {id:3,cx:18,cy:18,w:9,h:11,shape:SHAPE_RECT,type:T_BOSS,    depth:2,difficulty:1.0,degree:1,
+      doorway:{x:18,y:13}}
+  ];
+  const edges=[
+    {a:0,b:1,isLoop:false,isCritical:true},
+    {a:1,b:3,isLoop:false,isCritical:true},
+    {a:0,b:2,isLoop:false,isCritical:false},
+    {a:2,b:3,isLoop:true, isCritical:false}
+  ];
+  const W=26,H=26;
+  const grid=new Uint8Array(W*H), floorKind=new Uint8Array(W*H);
+  stampRooms(grid,floorKind,W,H,rooms);
+  const corridorCells=[];
+  for(const e of edges){
+    carveCorridor(grid,floorKind,W,H,rooms[e.a],rooms[e.b],2,rng,corridorCells);
+  }
+  const bossFloorMask=new Uint8Array(W*H);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){ if(inRoomShape(rooms[3],x,y)&&grid[y*W+x]===FLOOR) bossFloorMask[y*W+x]=1; }
+  buildWalls(grid,floorKind,W,H,bossFloorMask);
+  const doorways=findDoorways(grid,floorKind,W,H,corridorCells);
+  const bfs=bfsFloorField(grid,W,H,{x:rooms[0].cx,y:rooms[0].cy});
+  const decor=decorate(rooms,grid,floorKind,W,H,doorways,bfs,p.decorDensity,rng);
+  let floorTiles=0,wallTiles=0;
+  for(let i=0;i<grid.length;i++){ if(grid[i]===FLOOR)floorTiles++; else if(grid[i]===WALL)wallTiles++; }
+  const name="(Safe) "+generateName(rng,p.theme);
+  const checksum=computeChecksum(grid,W,H,rooms,edges);
+  return {
+    params:p,name,W,H,grid,bfs,floorKind,rooms,edges,doorways,corridorCells,
+    props:decor.props,spawns:decor.spawns,lights:decor.lights,
+    critPath:[0,1,3],
+    stats:{rooms:4,edges:4,loops:1,cyclomatic:1,criticalLength:3,floorTiles,wallTiles,
+      props:decor.props.length,spawns:decor.spawns.length,lights:decor.lights.length,
+      flood:100,usedDelaunay:false,triCount:0,bossId:3,entranceId:0,
+      bossDepth:bfs[rooms[3].cy*W+rooms[3].cx],maxBfs:Math.max(...bfs),
+      bossDoorway:rooms[3].doorway,checksum,genMs:performance.now()-t0,fallback:true,error:err?err.message:null}
+  };
+}
+
+// ============================================================
+// RENDERER — pure presentation. Owns all THREE objects.
+// buildDungeonScene(dungeon) → THREE.Group (+ .update, .dispose, .overlays)
+// ============================================================
+const TINT_BY_TYPE = {
+  [T_COMBAT]:0x8a8f9c, [T_TREASURE]:0x6fe89a, [T_SHRINE]:0x46d6e6,
+  [T_ELITE]:0xff8c3a, [T_BOSS]:0x9d7bff, [T_ENTRANCE]:0x6fe8ff
+};
+
+function buildDungeonScene(dungeon){
+  const group = new THREE.Group();
+  group.name = "Dungeon";
+  const toDispose = [];
+  const rng = makeRng((dungeon.params.seed ^ 0xA0A0A0)>>>0);
+  const W=dungeon.W, H=dungeon.H, grid=dungeon.grid, fk=dungeon.floorKind, bfs=dungeon.bfs;
+
+  // room-id per floor cell (for tinting)
+  const roomAt = new Int16Array(W*H).fill(-1);
+  for(const r of dungeon.rooms){
+    const x0=Math.floor(r.cx-r.w/2-1),x1=Math.ceil(r.cx+r.w/2+1);
+    const y0=Math.floor(r.cy-r.h/2-1),y1=Math.ceil(r.cy+r.h/2+1);
+    for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+      if(x<0||y<0||x>=W||y>=H) continue;
+      if(inRoomShape(r,x,y) && grid[y*W+x]===FLOOR) roomAt[y*W+x]=r.id;
+    }
+  }
+  const tintById={};
+  for(const r of dungeon.rooms){
+    const c=new THREE.Color(TINT_BY_TYPE[r.type]??0x8a8f9c);
+    c.offsetHSL(rng.float(-0.02,0.02), 0, rng.float(-0.04,0.04));
+    tintById[r.id]=c;
+  }
+
+  const dummy=new THREE.Object3D();
+  const tmpC=new THREE.Color();
+  const baseFloor=new THREE.Color(0x6a6258);
+  const corridorFloor=new THREE.Color(0x47433c);
+
+  // ---- FLOOR (InstancedMesh + per-instance AO color) ----
+  let nFloor=0,nWall=0;
+  for(let i=0;i<grid.length;i++){ if(grid[i]===FLOOR)nFloor++; else if(grid[i]===WALL)nWall++; }
+  const floorGeo=new THREE.BoxGeometry(1,0.2,1);
+  const floorMat=new THREE.MeshLambertMaterial({color:0xffffff});
+  const floorMesh=new THREE.InstancedMesh(floorGeo,floorMat,Math.max(1,nFloor));
+  toDispose.push(floorGeo,floorMat);
+  // ---- WALL ----
+  const wallGeo=new THREE.BoxGeometry(1,1,1);
+  const wallMat=new THREE.MeshLambertMaterial({color:0x4a4540});
+  const wallMesh=new THREE.InstancedMesh(wallGeo,wallMat,Math.max(1,nWall));
+  toDispose.push(wallGeo,wallMat);
+
+  // collect floor entries (sorted by BFS distance → count-based reveal floods outward)
+  const floorEntries=[];
+  const wallEntries=[];
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const i=y*W+x;
+    if(grid[i]===FLOOR){
+      let adj=0;
+      for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+        if(dx===0&&dy===0) continue;
+        const nx=x+dx,ny=y+dy;
+        if(nx<0||ny<0||nx>=W||ny>=H){adj++;continue;}
+        if(grid[ny*W+nx]===WALL) adj++;
+      }
+      floorEntries.push({x,y,adj,rid:roomAt[i],bfs:bfs[i]<0?9999:bfs[i]});
+    }else if(grid[i]===WALL){
+      wallEntries.push({x,y,hgt:2.0+rng.float(-0.25,0.25),shade:0.8+rng.float(0,0.35)});
+    }
+  }
+  floorEntries.sort((a,b)=> a.bfs-b.bfs || a.x-b.x || a.y-b.y);
+  wallEntries.sort((a,b)=> a.y-b.y || a.x-b.x);
+
+  let fi=0,wi=0;
+  for(const e of floorEntries){
+    dummy.position.set(e.x,0,e.y); dummy.rotation.set(0,0,0); dummy.scale.set(1,1,1);
+    dummy.updateMatrix(); floorMesh.setMatrixAt(fi,dummy.matrix);
+    const ao=1-0.09*Math.min(e.adj,4);
+    const noise=1+rng.float(-0.05,0.05);
+    if(e.rid>=0){ tmpC.copy(baseFloor).multiplyScalar(ao*noise); tmpC.lerp(tintById[e.rid],0.18); }
+    else        { tmpC.copy(corridorFloor).multiplyScalar(ao*noise); }
+    floorMesh.setColorAt(fi,tmpC);
+    fi++;
+  }
+  for(const e of wallEntries){
+    dummy.position.set(e.x,e.hgt/2,e.y); dummy.scale.set(1,e.hgt,1); dummy.rotation.set(0,0,0);
+    dummy.updateMatrix(); wallMesh.setMatrixAt(wi,dummy.matrix);
+    tmpC.set(0x4a4540).multiplyScalar(e.shade);
+    wallMesh.setColorAt(wi,tmpC);
+    wi++;
+  }
+  floorMesh.count=Math.max(1,nFloor); if(nFloor===0)floorMesh.visible=false;
+  wallMesh.count=Math.max(1,nWall); if(nWall===0)wallMesh.visible=false;
+  floorMesh.instanceMatrix.needsUpdate=true; wallMesh.instanceMatrix.needsUpdate=true;
+  if(floorMesh.instanceColor) floorMesh.instanceColor.needsUpdate=true;
+  if(wallMesh.instanceColor) wallMesh.instanceColor.needsUpdate=true;
+  group.add(floorMesh,wallMesh);
+
+  // ---- PROPS (one InstancedMesh per kind) ----
+  const byKind={};
+  for(const p of dungeon.props){ (byKind[p.kind]=byKind[p.kind]||[]).push(p); }
+  const flamePositions=[]; // {x,y,base,kind} for flicker
+  const propMeshes=[];
+
+  function addInstanced(kind, geo, mat, items, placer){
+    const n=items.length;
+    const mesh=new THREE.InstancedMesh(geo,mat,Math.max(1,n));
+    toDispose.push(geo,mat);
+    for(let k=0;k<n;k++){
+      const p=items[k];
+      placer(p,dummy,tmpC,rng);
+      dummy.updateMatrix(); mesh.setMatrixAt(k,dummy.matrix);
+      mesh.setColorAt(k,tmpC);
+    }
+    mesh.count=Math.max(1,n); mesh._has=n>0; if(n===0)mesh.visible=false;
+    if(mesh.instanceColor) mesh.instanceColor.needsUpdate=true;
+    group.add(mesh); propMeshes.push(mesh); return mesh;
+  }
+
+  // pillar
+  if(byKind[PROP_PILLAR]){
+    addInstanced(PROP_PILLAR,
+      new THREE.CylinderGeometry(0.28,0.34,2.0,8),
+      new THREE.MeshLambertMaterial({color:0x5a5248}),
+      byKind[PROP_PILLAR],
+      (p,d,c,r)=>{ d.position.set(p.x,1.0,p.y); d.rotation.set(0,p.rot,0); d.scale.set(p.scale,p.scale,p.scale); c.set(0x5a5248); });
+  }
+  // torch bracket + flame
+  if(byKind[PROP_TORCH]){
+    addInstanced(PROP_TORCH,
+      new THREE.BoxGeometry(0.2,0.2,0.5),
+      new THREE.MeshLambertMaterial({color:0x3a2e22}),
+      byKind[PROP_TORCH],
+      (p,d,c,r)=>{ d.position.set(p.x,1.2,p.y); d.rotation.set(0,p.rot||0,0); d.scale.set(1,1,1); c.set(0x3a2e22); });
+    for(const p of byKind[PROP_TORCH]) flamePositions.push({x:p.x,y:1.35,z:p.y,scale:1});
+  }
+  // brazier + flame
+  if(byKind[PROP_BRAZIER]){
+    addInstanced(PROP_BRAZIER,
+      new THREE.CylinderGeometry(0.4,0.3,0.5,8),
+      new THREE.MeshLambertMaterial({color:0x4a3528}),
+      byKind[PROP_BRAZIER],
+      (p,d,c,r)=>{ d.position.set(p.x,0.3,p.y); d.rotation.set(0,0,0); d.scale.set(1,1,1); c.set(0x4a3528); });
+    for(const p of byKind[PROP_BRAZIER]) flamePositions.push({x:p.x,y:0.75,z:p.y,scale:1.4});
+  }
+  // debris
+  if(byKind[PROP_DEBRIS]){
+    addInstanced(PROP_DEBRIS,
+      new THREE.DodecahedronGeometry(0.3,0),
+      new THREE.MeshLambertMaterial({color:0x3a3530}),
+      byKind[PROP_DEBRIS],
+      (p,d,c,r)=>{ d.position.set(p.x,0.15,p.y); d.rotation.set(p.rot,p.rot*1.3,0); d.scale.set(p.scale,p.scale*0.6,p.scale); c.set(0x3a3530); });
+  }
+  // chest
+  if(byKind[PROP_CHEST]){
+    addInstanced(PROP_CHEST,
+      new THREE.BoxGeometry(0.8,0.6,0.6),
+      new THREE.MeshLambertMaterial({color:0x8a6a30}),
+      byKind[PROP_CHEST],
+      (p,d,c,r)=>{ d.position.set(p.x,0.3,p.y); d.rotation.set(0,p.rot,0); d.scale.set(1,1,1); c.set(0x8a6a30); });
+  }
+  // crystal (shrine) — emissive
+  if(byKind[PROP_CRYSTAL]){
+    addInstanced(PROP_CRYSTAL,
+      new THREE.OctahedronGeometry(0.5,0),
+      new THREE.MeshBasicMaterial({color:0x6fe89a}),
+      byKind[PROP_CRYSTAL],
+      (p,d,c,r)=>{ d.position.set(p.x,0.9,p.y); d.rotation.set(0,p.rot,0); d.scale.set(1,1.4,1); c.set(0x6fe89a); });
+  }
+  // portal (entrance) — emissive ring
+  if(byKind[PROP_PORTAL]){
+    addInstanced(PROP_PORTAL,
+      new THREE.TorusGeometry(0.7,0.16,8,20),
+      new THREE.MeshBasicMaterial({color:0x6fe8ff}),
+      byKind[PROP_PORTAL],
+      (p,d,c,r)=>{ d.position.set(p.x,0.9,p.y); d.rotation.set(Math.PI/2,0,p.rot); d.scale.set(1,1,1); c.set(0x6fe8ff); });
+  }
+
+  // flame instanced mesh (emissive, flickered per-frame)
+  const flameMesh=new THREE.InstancedMesh(
+    new THREE.IcosahedronGeometry(0.22,0),
+    new THREE.MeshBasicMaterial({color:0xff8c3a}),
+    Math.max(1,flamePositions.length));
+  toDispose.push(flameMesh.geometry, flameMesh.material);
+  const flameBase=[];
+  for(let k=0;k<flamePositions.length;k++){
+    const f=flamePositions[k];
+    dummy.position.set(f.x,f.y,f.z); dummy.rotation.set(0,k*0.7,0); dummy.scale.set(f.scale,f.scale,f.scale);
+    dummy.updateMatrix(); flameMesh.setMatrixAt(k,dummy.matrix);
+    tmpC.setHex(k%2?0xff8c3a:0xffb84a); flameMesh.setColorAt(k,tmpC);
+    flameBase.push({x:f.x,y:f.y,z:f.z,s:f.scale});
+  }
+  flameMesh.count=Math.max(1,flamePositions.length);
+  flameMesh._has = flamePositions.length>0;
+  if(flamePositions.length===0) flameMesh.visible=false;
+  if(flameMesh.instanceColor) flameMesh.instanceColor.needsUpdate=true;
+  flameMesh.instanceMatrix.needsUpdate=true;
+  group.add(flameMesh);
+
+  // spawn markers
+  let spawnMesh=null;
+  if(dungeon.spawns.length){
+    spawnMesh=new THREE.InstancedMesh(
+      new THREE.ConeGeometry(0.3,0.7,4),
+      new THREE.MeshBasicMaterial({color:0xff3030}),
+      dungeon.spawns.length);
+    toDispose.push(spawnMesh.geometry,spawnMesh.material);
+    for(let k=0;k<dungeon.spawns.length;k++){
+      const s=dungeon.spawns[k];
+      dummy.position.set(s.x,0.45,s.y); dummy.rotation.set(0,k*0.4,0);
+      dummy.scale.set(1,s.tier===2?1.5:1,1); dummy.updateMatrix();
+      spawnMesh.setMatrixAt(k,dummy.matrix);
+      tmpC.setHex(s.tier===2?0xff6030:0xff3030); spawnMesh.setColorAt(k,tmpC);
+    }
+    spawnMesh._has=true;
+    spawnMesh.instanceMatrix.needsUpdate=true; if(spawnMesh.instanceColor) spawnMesh.instanceColor.needsUpdate=true;
+    group.add(spawnMesh);
+  }
+
+  // ---- LIGHTING ----
+  const lights=[];
+  // ambient base
+  const hemi=new THREE.HemisphereLight(0x2a3550, 0x0a0a08, 0.55);
+  group.add(hemi);
+  const dir=new THREE.DirectionalLight(0x8a9bc0, 0.35);
+  dir.position.set(0.5,1,0.3); group.add(dir);
+  toDispose.push(hemi,dir);
+  // dynamic point lights (already capped to 12 in data)
+  for(const L of dungeon.lights){
+    const pl=new THREE.PointLight(L.color, 2.4, L.dist, 2.0);
+    pl.position.set(L.x, 1.4, L.y);
+    group.add(pl); lights.push({light:pl, base:2.4, x:L.x, y:L.y, isTorch:(L.color===0xff8c3a)});
+    toDispose.push(pl);
+  }
+
+  // ---- DEBUG OVERLAYS ----
+  const overlays={};
+  function edgeOverlay(edges, color, opacity){
+    const pos=[];
+    for(const e of edges){ const a=dungeon.rooms[e.a],b=dungeon.rooms[e.b]; pos.push(a.cx,0.1,a.cy, b.cx,0.1,b.cy); }
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+    const m=new THREE.LineBasicMaterial({color, transparent:true, opacity});
+    const ls=new THREE.LineSegments(g,m);
+    toDispose.push(g,m); group.add(ls); return ls;
+  }
+  overlays.graph    = edgeOverlay(dungeon.edges, 0x4a5060, 0.35);
+  overlays.mst      = edgeOverlay(dungeon.edges.filter(e=>!e.isLoop), 0xffffff, 0.6);
+  overlays.loops    = edgeOverlay(dungeon.edges.filter(e=>e.isLoop), 0x46d6e6, 0.9);
+  overlays.critical = edgeOverlay(dungeon.edges.filter(e=>e.isCritical), 0xff5a5a, 0.95);
+  // difficulty dots at room centers
+  {
+    const dots=new THREE.InstancedMesh(new THREE.SphereGeometry(0.4,8,6),
+      new THREE.MeshBasicMaterial({color:0xffffff}), Math.max(1,dungeon.rooms.length));
+    toDispose.push(dots.geometry,dots.material);
+    for(let k=0;k<dungeon.rooms.length;k++){
+      const r=dungeon.rooms[k];
+      dummy.position.set(r.cx,0.6,r.cy); dummy.rotation.set(0,0,0); dummy.scale.set(1,1,1);
+      dummy.updateMatrix(); dots.setMatrixAt(k,dummy.matrix);
+      tmpC.setHSL(0.65 - 0.65*r.difficulty, 0.9, 0.5); // blue→red
+      dots.setColorAt(k,tmpC);
+    }
+    dots.count=Math.max(1,dungeon.rooms.length);
+    if(dots.instanceColor) dots.instanceColor.needsUpdate=true;
+    dots.visible=false; group.add(dots); overlays.difficulty=dots;
+  }
+  overlays.graph.visible=false; overlays.mst.visible=false;
+  overlays.loops.visible=false; overlays.critical.visible=false;
+
+  // ---- per-frame update: flame flicker + torch light flicker ----
+  group.update = function(time){
+    time = time||0;
+    const t = time*0.001;
+    if(flameMesh.visible){
+      for(let k=0;k<flameBase.length;k++){
+        const f=flameBase[k];
+        const flick=0.8+0.35*Math.sin(t*12+k*1.7)+0.15*Math.sin(t*27+k);
+        dummy.position.set(f.x, f.y+flick*0.05, f.z);
+        dummy.rotation.set(0,t*0.5+k,0);
+        dummy.scale.set(f.s, f.s*flick, f.s);
+        dummy.updateMatrix(); flameMesh.setMatrixAt(k,dummy.matrix);
+      }
+      flameMesh.instanceMatrix.needsUpdate=true;
+    }
+    for(const L of lights){
+      if(L.isTorch){
+        const f=0.75+0.25*Math.sin(t*11+L.x*0.9+L.y*0.7)+0.12*Math.sin(t*23+L.x);
+        L.light.intensity = L.base*f;
+      }else{
+        L.light.intensity = L.base*(0.92+0.08*Math.sin(t*2+L.x));
+      }
+    }
+  };
+
+  group.setOverlay = function(name, visible){
+    if(overlays[name]) overlays[name].visible=visible;
+  };
+
+  // expose mesh refs + counts for the staged-build animation
+  group._meshes = {
+    floor: floorMesh, wall: wallMesh, props: propMeshes,
+    flame: flameMesh, spawn: spawnMesh, overlays,
+    nFloor, nWall
+  };
+
+  // staged build: p in [0,1] — graph→floor flood(BFS)→walls→props
+  group.applyBuild = function(p){
+    const m = group._meshes;
+    const ff = Math.max(0, Math.min(1, (p-0.15)/0.45));
+    m.floor.visible = ff > 0.001 && m.nFloor>0;
+    m.floor.count = Math.max(1, Math.floor(ff * m.nFloor));
+    m.floor.instanceMatrix.needsUpdate = true;
+    m.wall.visible = p > 0.55 && m.nWall>0;
+    const propVis = p > 0.78;
+    for(const pm of m.props){ if(pm._has) pm.visible = propVis; }
+    if(m.flame) m.flame.visible = propVis && m.flame._has;
+    if(m.spawn) m.spawn.visible = propVis && m.spawn._has;
+    // graph overlays during early build
+    if(p < 0.5){ overlays.graph.visible=true; overlays.mst.visible=true; overlays.loops.visible=true; }
+  };
+  // restore full visibility after staged build completes
+  group.finalizeBuild = function(){
+    const m = group._meshes;
+    if(m.nFloor>0){ m.floor.visible=true; m.floor.count=Math.max(1,m.nFloor); m.floor.instanceMatrix.needsUpdate=true; }
+    if(m.nWall>0) m.wall.visible=true;
+    for(const pm of m.props){ if(pm._has) pm.visible=true; }
+    if(m.flame && m.flame._has) m.flame.visible=true;
+    if(m.spawn && m.spawn._has) m.spawn.visible=true;
+  };
+
+  group.dispose = function(){
+    for(const o of toDispose){ if(o.dispose) o.dispose(); }
+    for(let i=group.children.length-1;i>=0;i--){ group.remove(group.children[i]); }
+  };
+
+  return group;
+}
+
+// ============================================================
+// APP — scene/camera, panel wiring, acceptance tests, build anim
+// ============================================================
+let scene, camera, renderer, sceneGroup=null, dungeon=null, buildState=null;
+const view = document.getElementById('view');
+const hud  = document.getElementById('hud');
+const buildBar = document.getElementById('buildBar');
+
+function initThree(){
+  renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  renderer.setSize(view.clientWidth, view.clientHeight);
+  view.appendChild(renderer.domElement);
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x05060a);
+  scene.fog = new THREE.FogExp2(0x05060a, 0.028);
+  camera = new THREE.OrthographicCamera(-30,30,30,-30,0.1,2000);
+  window.addEventListener('resize', onResize);
+}
+
+function fitCamera(d){
+  const cx=d.W/2, cz=d.H/2;
+  const span=Math.max(d.W,d.H);
+  const aspect=view.clientWidth/view.clientHeight;
+  const halfH=span/2+4, halfW=halfH*aspect;
+  camera.left=-halfW; camera.right=halfW; camera.top=halfH; camera.bottom=-halfH;
+  camera.updateProjectionMatrix();
+  const R=span*1.6+24;
+  const yaw=Math.PI/4, pitch=37*Math.PI/180;
+  camera.position.set(cx+R*Math.cos(pitch)*Math.cos(yaw), R*Math.sin(pitch), cz+R*Math.cos(pitch)*Math.sin(yaw));
+  camera.lookAt(cx,0,cz);
+}
+
+function onResize(){
+  if(!dungeon) return;
+  const w=view.clientWidth, h=view.clientHeight;
+  renderer.setSize(w,h);
+  const aspect=w/h, span=Math.max(dungeon.W,dungeon.H), halfH=span/2+4;
+  camera.left=-halfH*aspect; camera.right=halfH*aspect; camera.top=halfH; camera.bottom=-halfH;
+  camera.updateProjectionMatrix();
+}
+
+function hashStr(s){ let h=0; for(let i=0;i<s.length;i++){ h=(Math.imul(h,31)+s.charCodeAt(i))|0; } return h; }
+function readParams(){
+  const raw=document.getElementById('seed').value.trim();
+  let seed=parseInt(raw,10);
+  if(!isFinite(seed)||seed<1) seed=((hashStr(raw)||1)>>>0)||1;
+  return {
+    seed: seed>>>0,
+    roomCount: parseInt(document.getElementById('roomCount').value,10),
+    loopChance: parseFloat(document.getElementById('loopChance').value),
+    decorDensity: parseFloat(document.getElementById('decorDensity').value),
+    theme: document.getElementById('theme').value,
+    animateBuild: document.getElementById('animateBuild').checked
+  };
+}
+
+function applyOverlayToggles(){
+  if(!sceneGroup) return;
+  sceneGroup.setOverlay('graph', document.getElementById('ov_graph').checked);
+  sceneGroup.setOverlay('mst', document.getElementById('ov_mst').checked);
+  sceneGroup.setOverlay('loops', document.getElementById('ov_loops').checked);
+  sceneGroup.setOverlay('critical', document.getElementById('ov_critical').checked);
+  sceneGroup.setOverlay('difficulty', document.getElementById('ov_diff').checked);
+}
+
+function regenerate(){
+  const params=readParams();
+  const d=generateDungeon(params);
+  dungeon=d;
+  if(sceneGroup){ scene.remove(sceneGroup); sceneGroup.dispose(); sceneGroup=null; }
+  sceneGroup=buildDungeonScene(d);
+  scene.add(sceneGroup);
+  fitCamera(d);
+  if(params.animateBuild){
+    buildState={start:performance.now(), dur:2600, animating:true};
+    buildBar.style.display='block';
+  }else{
+    buildState=null; buildBar.style.display='none';
+    sceneGroup.finalizeBuild();
+    applyOverlayToggles();
+  }
+  updateStats(d);
+  runTests(d, params);
+  hud.textContent = d.name + "  ·  " + (d.stats.usedDelaunay?("Delaunay·"+d.stats.triCount):"KNN(k=4)") + (d.stats.fallback?" · FALLBACK":"");
+}
+
+function updateStats(d){
+  const s=d.stats;
+  const rows=[
+    ["name", d.name],
+    ["seed", d.params.seed],
+    ["rooms", s.rooms],
+    ["edges", s.edges],
+    ["loops", s.loops+" (κ="+s.cyclomatic+")"],
+    ["crit len", s.criticalLength],
+    ["floor", s.floorTiles],
+    ["wall", s.wallTiles],
+    ["props", s.props],
+    ["spawns", s.spawns],
+    ["lights", s.lights],
+    ["bossDepth", s.bossDepth+"/"+s.maxBfs],
+    ["graph", s.usedDelaunay?("Delaunay·"+s.triCount):"KNN(k=4)"],
+    ["gen ms", s.genMs.toFixed(1)],
+    ["checksum", s.checksum],
+    ["flood", s.flood+"%"]
+  ];
+  document.getElementById('stats').innerHTML =
+    rows.map(r=>`<div><span>${r[0]}</span><b>${r[1]}</b></div>`).join("");
+}
+
+function runTests(d, params){
+  const {grid,W,H,bfs,rooms,edges,doorways,props,spawns,stats}=d;
+  const cellAt=(x,y)=>(x<0||y<0||x>=W||y>=H)?VOID:grid[y*W+x];
+  const out=[];
+  // 1. flood 100%
+  let floor=0,reached=0;
+  for(let i=0;i<grid.length;i++){ if(grid[i]===FLOOR){floor++; if(bfs[i]>=0)reached++;} }
+  const floodPct=floor>0?reached/floor*100:0;
+  out.push(["flood reachability 100%", floodPct>=99.99, floodPct.toFixed(2)+"%"]);
+  // 2. checksum stable across 3 runs (skip for fallback)
+  let csOk=true, csVal=stats.checksum;
+  if(!stats.fallback){
+    const a=generateDungeon(params).stats.checksum;
+    const b=generateDungeon(params).stats.checksum;
+    csOk=(a===b && b===csVal);
+    csVal=csOk?csVal:csVal+"≠"+a.slice(0,6);
+  }
+  out.push(["checksum stable (3 runs, FNV-1a)", csOk, csVal]);
+  // 3. boss depth / entrance
+  const boss=rooms[stats.bossId], entrance=rooms[stats.entranceId];
+  out.push(["boss depth ≥60% max", stats.bossDepth>=0.6*stats.maxBfs, stats.bossDepth+"/"+stats.maxBfs]);
+  out.push(["entrance degree=1", entrance.degree===1, "deg="+entrance.degree]);
+  let adj=false;
+  for(const e of edges){ if((e.a===entrance.id&&e.b===boss.id)||(e.a===boss.id&&e.b===entrance.id)){adj=true;break;} }
+  out.push(["entrance ≠ boss-adjacent", !adj, adj?"adjacent":"ok"]);
+  // 4. leaves + cyclomatic
+  const leaves=rooms.filter(r=>r.degree===1).length;
+  const wantL=rooms.length>=40?3:1;
+  out.push(["≥3 leaves (40+ rooms)", leaves>=wantL, leaves+" leaves"]);
+  const cyc=edges.length-rooms.length+1;
+  out.push(["cyclomatic = E−V+1 ≥1", cyc===stats.cyclomatic && cyc>=1, "κ="+cyc]);
+  // 5. props/spawns placement
+  let badFloor=false;
+  for(const p of props){ if(cellAt(p.x,p.y)!==FLOOR){badFloor=true;break;} }
+  for(const s of spawns){ if(cellAt(s.x,s.y)!==FLOOR){badFloor=true;break;} }
+  out.push(["props/spawns on FLOOR only", !badFloor, badFloor?"off-floor":"ok"]);
+  const dwSet=new Set(doorways.map(d=>d.x+","+d.y));
+  let onDoor=false;
+  for(const p of props){ if(dwSet.has(p.x+","+p.y)){onDoor=true;break;} }
+  if(!onDoor) for(const s of spawns){ if(dwSet.has(s.x+","+s.y)){onDoor=true;break;} }
+  out.push(["none on doorways (mask)", !onDoor, onDoor?"on doorway":"ok"]);
+  out.push(["lights within budget ≤12", stats.lights<=12, stats.lights]);
+  // 6. gen time — dedicated 60-room benchmark (decoupled from the slider)
+  let benchMs=Infinity;
+  try{
+    const bench=generateDungeon({seed:params.seed,roomCount:60,loopChance:params.loopChance,decorDensity:params.decorDensity,theme:params.theme});
+    benchMs=bench.stats.genMs;
+  }catch(e){ benchMs=Infinity; }
+  out.push(["gen <50ms @60 rooms", benchMs<50, benchMs.toFixed(1)+"ms"]);
+  // 7. boss doorway on long-edge center
+  const bd=stats.bossDoorway;
+  let dwOk=false;
+  if(bd){
+    if(boss.w>=boss.h){
+      dwOk=(bd.x===boss.cx-Math.floor(boss.w/2)||bd.x===boss.cx+Math.floor(boss.w/2))&&bd.y===boss.cy;
+    }else{
+      dwOk=(bd.y===boss.cy-Math.floor(boss.h/2)||bd.y===boss.cy+Math.floor(boss.h/2))&&bd.x===boss.cx;
+    }
+  }
+  out.push(["boss doorway on long-edge center", dwOk, bd?`(${bd.x},${bd.y})`:"none"]);
+  // boss wall thickness 2 — sample a short edge (perpendicular to the doorway's
+  // long edge) at distance 2. Non-boss corridors avoid the 2-ring (detour/gap);
+  // only rare boss loop corridors along this side can pierce it.
+  let thick2=false;
+  if(boss.w>=boss.h){ // doorway on E/W long edge → sample north short edge
+    thick2 = cellAt(boss.cx, boss.cy-Math.floor(boss.h/2)-2)===WALL;
+  }else{              // doorway on N/S long edge → sample east short edge
+    thick2 = cellAt(boss.cx+Math.floor(boss.w/2)+2, boss.cy)===WALL;
+  }
+  out.push(["boss wall thickness = 2", thick2, thick2?"2-thick":"?"]);
+
+  document.getElementById('tests').innerHTML =
+    out.map(t=>`<div class="t"><span class="sw" style="background:${t[1]?'#6fe89a':'#ff5a5a'}"></span><b>${t[1]?'✓':'✗'}</b> ${t[0]} — <span style="color:var(--dim)">${t[2]}</span></div>`).join("");
+}
+
+function wirePanel(){
+  [['roomCount','roomCount_v',v=>v],['loopChance','loopChance_v',v=>parseFloat(v).toFixed(2)],['decorDensity','decorDensity_v',v=>parseFloat(v).toFixed(2)]]
+    .forEach(([id,vid,fmt])=>{
+      const el=document.getElementById(id), lbl=document.getElementById(vid);
+      el.addEventListener('input', ()=>{ lbl.textContent=fmt(el.value); });
+    });
+  document.getElementById('gen').addEventListener('click', regenerate);
+  document.getElementById('roll').addEventListener('click', ()=>{
+    document.getElementById('seed').value=((Math.random()*1e9)|0)+1;
+    regenerate();
+  });
+  ['ov_graph','ov_mst','ov_loops','ov_critical','ov_diff'].forEach(id=>{
+    document.getElementById(id).addEventListener('change', applyOverlayToggles);
+  });
+  document.getElementById('theme').addEventListener('change', regenerate);
+  document.getElementById('seed').addEventListener('keydown', e=>{ if(e.key==='Enter') regenerate(); });
+}
+
+function animate(time){
+  requestAnimationFrame(animate);
+  if(sceneGroup){
+    if(buildState && buildState.animating){
+      const p=Math.min(1,(time-buildState.start)/buildState.dur);
+      sceneGroup.applyBuild(p);
+      buildBar.textContent="building… "+((p*100)|0)+"%";
+      if(p>=1){ buildState.animating=false; buildBar.style.display='none'; sceneGroup.finalizeBuild(); applyOverlayToggles(); }
+    }
+    sceneGroup.update(time);
+  }
+  renderer.render(scene, camera);
+}
+
+initThree();
+wirePanel();
+regenerate();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
